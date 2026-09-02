@@ -1,0 +1,107 @@
+{
+  "generated_at": "2026-09-01T16:49:53+02:00",
+  "checks": [
+    {
+      "name": "logical-landscape",
+      "passed": true,
+      "detail": "1440x810"
+    },
+    {
+      "name": "logical-portrait",
+      "passed": true,
+      "detail": "810x1440"
+    },
+    {
+      "name": "nanovo-logo-embedded",
+      "passed": true,
+      "detail": "logo jest dekodowane z zasobu wbudowanego"
+    },
+    {
+      "name": "external-branding-loaded",
+      "passed": true,
+      "detail": "wszystkie zasoby partnera wczytane z katalogu assets"
+    },
+    {
+      "name": "layouts-in-bounds",
+      "passed": true,
+      "detail": "wszystkie kluczowe prostokaty mieszcza sie w pionie i poziomie"
+    },
+    {
+      "name": "windows-pe64-gui",
+      "passed": true,
+      "detail": "PE32+ x86-64, Windows GUI"
+    },
+    {
+      "name": "touch-start",
+      "passed": true,
+      "detail": "screen=1"
+    },
+    {
+      "name": "touch-keyboard",
+      "passed": true,
+      "detail": "nick=NANOVO"
+    },
+    {
+      "name": "touch-play",
+      "passed": true,
+      "detail": "screen=2"
+    },
+    {
+      "name": "countdown",
+      "passed": true,
+      "detail": "screen=3"
+    },
+    {
+      "name": "touch-swipe",
+      "passed": true,
+      "detail": "x=1-\u003e2"
+    },
+    {
+      "name": "touch-bomb",
+      "passed": true,
+      "detail": "bombs=1"
+    },
+    {
+      "name": "ranking-persistence",
+      "passed": true,
+      "detail": "entries=10"
+    },
+    {
+      "name": "branding-hot-reload",
+      "passed": true,
+      "detail": "fingerprint oraz grafika zmienily sie bez restartu"
+    },
+    {
+      "name": "exe-unchanged-during-brand-swap",
+      "passed": true,
+      "detail": "sha256=4a2f1fd98c4e865b2976e8cbc5996ffd224e35d8d05a7f05af648ea854c44d77"
+    },
+    {
+      "name": "renderer-performance",
+      "passed": true,
+      "detail": "avg=8.77ms p95=10.29ms"
+    }
+  ],
+  "screenshots": {
+    "admin_pin_portrait_4k": "08-admin-pin-portrait-4k.png",
+    "brand_after_4k": "11-brand-after-4k.png",
+    "brand_before_4k": "10-brand-before-4k.png",
+    "countdown_landscape_4k": "03-countdown-landscape-4k.png",
+    "game_landscape_4k": "04-game-landscape-4k.png",
+    "game_portrait_4k": "05-game-portrait-4k.png",
+    "history_landscape_4k": "09-history-landscape-4k.png",
+    "nick_landscape_4k": "02-nick-landscape-4k.png",
+    "ranking_portrait_4k": "07-ranking-portrait-4k.png",
+    "start_landscape_4k": "01-start-landscape-4k.png",
+    "summary_portrait_4k": "06-summary-portrait-4k.png"
+  },
+  "render_average_ms": 8.769566666666666,
+  "render_p95_ms": 10.286,
+  "brand_fingerprint_before": "9e86fcae5e97d493",
+  "brand_fingerprint_after": "49a33d65c77cd838",
+  "partner_logo_sha256_before": "92c1b6b693984d2273bcc5009a8094ba3dc6448924109fa23b8f458d85e85906",
+  "partner_logo_sha256_after": "00944fe708078bafce13b5fd542e9e2c2100474a2e2b0771875485dcd968e921",
+  "exe_sha256_before": "4a2f1fd98c4e865b2976e8cbc5996ffd224e35d8d05a7f05af648ea854c44d77",
+  "exe_sha256_after": "4a2f1fd98c4e865b2976e8cbc5996ffd224e35d8d05a7f05af648ea854c44d77",
+  "exe_size_bytes": 2952192
+}

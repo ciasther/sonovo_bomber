@@ -1,0 +1,21 @@
+{
+  "event_id": "demo-katowice-2026",
+  "event_name": "BOMBER RUSH - EVENT DEMO",
+  "round_seconds": 75,
+  "idle_return_seconds": 15,
+  "admin_pin": "2468",
+  "partner": {
+    "name": "YOUR BRAND",
+    "headline": "ZBIERZ PRODUKTY. ZDOBADZ NAJWYZSZY WYNIK.",
+    "summary_title": "GRATULACJE! ODBIERZ NAGRODE PARTNERA",
+    "summary_text": "ZESKANUJ KOD QR I SPRAWDZ SZCZEGOLY AKCJI.",
+    "primary": "#63F3FF",
+    "secondary": "#FF4FD8",
+    "accent": "#FFB547",
+    "start_background": "start-background.png",
+    "partner_logo": "partner-logo.png",
+    "summary_ad": "summary-ad.png",
+    "qr": "qr-placeholder.png",
+    "product_item": "product-item.png"
+  }
+}

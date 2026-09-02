@@ -1,0 +1,3 @@
+dist/
+data/*.jsonl
+bomber-rush-error.log
