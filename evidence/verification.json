@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-01T16:49:53+02:00",
+  "generated_at": "2026-09-02T15:51:49+02:00",
   "checks": [
     {
       "name": "logical-landscape",
@@ -74,12 +74,12 @@
     {
       "name": "exe-unchanged-during-brand-swap",
       "passed": true,
-      "detail": "sha256=4a2f1fd98c4e865b2976e8cbc5996ffd224e35d8d05a7f05af648ea854c44d77"
+      "detail": "sha256=ac04aa3066a1643842f576140b4d25bd3eb8759e1b5aff9ea812bc80fec5bed9"
     },
     {
       "name": "renderer-performance",
       "passed": true,
-      "detail": "avg=8.77ms p95=10.29ms"
+      "detail": "avg=4.63ms p95=6.18ms"
     }
   ],
   "screenshots": {
@@ -95,13 +95,13 @@
     "start_landscape_4k": "01-start-landscape-4k.png",
     "summary_portrait_4k": "06-summary-portrait-4k.png"
   },
-  "render_average_ms": 8.769566666666666,
-  "render_p95_ms": 10.286,
-  "brand_fingerprint_before": "9e86fcae5e97d493",
-  "brand_fingerprint_after": "49a33d65c77cd838",
+  "render_average_ms": 4.629666666666667,
+  "render_p95_ms": 6.177,
+  "brand_fingerprint_before": "2ba065267887fc5a",
+  "brand_fingerprint_after": "3b47e903b3f4b74c",
   "partner_logo_sha256_before": "92c1b6b693984d2273bcc5009a8094ba3dc6448924109fa23b8f458d85e85906",
   "partner_logo_sha256_after": "00944fe708078bafce13b5fd542e9e2c2100474a2e2b0771875485dcd968e921",
-  "exe_sha256_before": "4a2f1fd98c4e865b2976e8cbc5996ffd224e35d8d05a7f05af648ea854c44d77",
-  "exe_sha256_after": "4a2f1fd98c4e865b2976e8cbc5996ffd224e35d8d05a7f05af648ea854c44d77",
-  "exe_size_bytes": 2952192
+  "exe_sha256_before": "ac04aa3066a1643842f576140b4d25bd3eb8759e1b5aff9ea812bc80fec5bed9",
+  "exe_sha256_after": "ac04aa3066a1643842f576140b4d25bd3eb8759e1b5aff9ea812bc80fec5bed9",
+  "exe_size_bytes": 2963456
 }

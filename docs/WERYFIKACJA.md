@@ -4,6 +4,8 @@
 - `go vet`: bez błędów.
 - Windows `.exe`: poprawny plik PE32+ x86-64 z podsystemem GUI.
 - Przepływ dotykowy: start, klawiatura ekranowa, odliczanie, przesunięcie i bomba sprawdzone automatycznie.
+- Gesty (`internal/bomber/input_test.go`): ruch przed oderwaniem palca, marsz przy przytrzymaniu, zmiana kierunku, bomba drugim palcem, anulowanie.
+- Render 1440x810: tło i siatka planszy są buforowane; test porównuje klatkę z bufora z klatką świeżą piksel po pikselu.
 - Układ: zrzuty 3840x2160 i 2160x3840, wszystkie kluczowe obszary mieszczą się w ekranie.
 - Ranking: zapis i ponowne odczytanie historii sprawdzone.
 - Branding: grafika partnera została podmieniona podczas działania testu, a suma SHA-256 `.exe` pozostała identyczna.

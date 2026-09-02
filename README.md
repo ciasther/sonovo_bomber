@@ -2,8 +2,9 @@
 
 Gotowa gra kioskowa dla Windows x86-64. Domyślnie uruchamia się bez ramek, na pełnym ekranie i ponad innymi oknami. Cała obsługa odbywa się dotykiem:
 
-- przesunięcie palcem w czterech kierunkach - ruch o jedno pole,
-- dotknięcie planszy - ustawienie bomby,
+- przesunięcie palcem w czterech kierunkach - ruch; ruch zaczyna się już w trakcie gestu, a przytrzymany palec prowadzi postać dalej,
+- zmiana kierunku - przeciągnięcie palca w nową stronę bez odrywania,
+- dotknięcie planszy albo drugi palec podczas marszu - ustawienie bomby (na start dwie bomby naraz),
 - pierwsza runda - krótka podpowiedź gestów,
 - wynik rundy pozostaje na ekranie do wybrania rankingu albo ponownej gry,
 - nick, ranking i panel historii - duże przyciski ekranowe.
@@ -57,6 +58,10 @@ Linux lub macOS:
 ```
 
 Wynikiem jest `dist/BomberRush.exe`.
+
+## CI
+
+Push na `beta` uruchamia `.github/workflows/ci.yml` na runnerach self-hosted: testy, `go vet`, build `dist/BomberRush.exe` jako artefakt. Po zielonym buildzie workflow fast-forwarduje `main`, tworzy tag `vX.Y.Z` z pliku `VERSION` i publikuje release z `.exe`. Numer w `VERSION` podnosi się przed wydaniem.
 
 ## Weryfikacja deweloperska
 

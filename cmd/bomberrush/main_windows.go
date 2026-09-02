@@ -27,11 +27,16 @@ const (
 	pmRemove                = 0x0001
 	wmDestroy               = 0x0002
 	wmSize                  = 0x0005
+	wmActivate              = 0x0006
+	wmKillFocus             = 0x0008
+	wmCaptureChanged        = 0x0215
+	wmPointerLeave          = 0x024A
 	wmClose                 = 0x0010
 	wmPaint                 = 0x000F
 	wmEraseBkgnd            = 0x0014
 	wmSetCursor             = 0x0020
 	wmSysCommand            = 0x0112
+	wmMouseMove             = 0x0200
 	wmLButtonDown           = 0x0201
 	wmLButtonUp             = 0x0202
 	wmPointerUpdate         = 0x0245
@@ -44,7 +49,7 @@ const (
 	smCYScreen              = 1
 	dibRGBColors            = 0
 	srcCopy                 = 0x00CC0020
-	halfTone                = 4
+	colorOnColor            = 3
 	ptTouch                 = 0x00000002
 	esSystemRequired        = 0x00000001
 	esDisplayRequired       = 0x00000002
@@ -59,6 +64,7 @@ var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	winmm    = syscall.NewLazyDLL("winmm.dll")
 
 	procRegisterClassExW              = user32.NewProc("RegisterClassExW")
 	procCreateWindowExW               = user32.NewProc("CreateWindowExW")
@@ -92,6 +98,8 @@ var (
 	procGetModuleHandleW              = kernel32.NewProc("GetModuleHandleW")
 	procLoadIconW                     = user32.NewProc("LoadIconW")
 	procSetThreadExecutionState       = kernel32.NewProc("SetThreadExecutionState")
+	procTimeBeginPeriod               = winmm.NewProc("timeBeginPeriod")
+	procTimeEndPeriod                 = winmm.NewProc("timeEndPeriod")
 )
 
 type point struct {
@@ -159,21 +167,18 @@ type bitmapInfo struct {
 }
 
 type runner struct {
-	hwnd            uintptr
-	hdc             uintptr
-	app             *bomber.App
-	renderer        *bomber.Renderer
-	clientW         int
-	clientH         int
-	logicalW        int
-	logicalH        int
-	running         bool
-	activePointerID uint16
-	pointerDown     bool
-	mouseDown       bool
-	startX          int
-	startY          int
-	lastPointerAt   time.Time
+	hwnd          uintptr
+	hdc           uintptr
+	app           *bomber.App
+	renderer      *bomber.Renderer
+	clientW       int
+	clientH       int
+	logicalW      int
+	logicalH      int
+	running       bool
+	gestures      *bomber.Gestures
+	mouseDown     bool
+	lastPointerAt time.Time
 }
 
 var activeRunner *runner
@@ -202,47 +207,55 @@ func windowProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 		return 0
 	case wmPointerDown:
 		if r != nil {
-			id := lowWord(wParam)
-			if !r.pointerDown {
-				x, y := r.pointerClientPosition(lParam)
-				r.beginPointer(id, x, y)
-			}
+			x, y := r.pointerClientPosition(lParam)
+			r.lastPointerAt = time.Now()
+			r.gestures.Down(int(lowWord(wParam)), x, y)
 		}
 		return 0
 	case wmPointerUpdate:
-		if r != nil && r.pointerDown && lowWord(wParam) == r.activePointerID {
+		if r != nil {
+			x, y := r.pointerClientPosition(lParam)
 			r.lastPointerAt = time.Now()
+			r.gestures.Move(int(lowWord(wParam)), x, y)
 		}
 		return 0
 	case wmPointerUp:
-		if r != nil && r.pointerDown && lowWord(wParam) == r.activePointerID {
+		if r != nil {
 			x, y := r.pointerClientPosition(lParam)
 			r.lastPointerAt = time.Now()
-			r.endGesture(x, y)
-			r.pointerDown = false
-			r.activePointerID = 0
+			r.gestures.Up(int(lowWord(wParam)), x, y)
 		}
 		return 0
-	case wmPointerCaptureChanged:
+	case wmPointerCaptureChanged, wmPointerLeave, wmKillFocus, wmCaptureChanged:
 		if r != nil {
-			r.pointerDown = false
-			r.activePointerID = 0
+			r.mouseDown = false
+			r.gestures.Cancel()
+		}
+		if message == wmKillFocus {
+			return 0
+		}
+	case wmActivate:
+		if r != nil && lowWord(wParam) == 0 {
+			r.mouseDown = false
+			r.gestures.Cancel()
+		}
+	case wmLButtonDown:
+		if r != nil && !r.gestures.Active() && time.Since(r.lastPointerAt) > 350*time.Millisecond {
+			r.mouseDown = true
+			procSetCapture.Call(hwnd)
+			r.gestures.Down(bomber.MousePointerID, signedWord(lowWord(lParam)), signedWord(highWord(lParam)))
 		}
 		return 0
-	case wmLButtonDown:
-		if r != nil && time.Since(r.lastPointerAt) > 350*time.Millisecond {
-			x, y := signedWord(lowWord(lParam)), signedWord(highWord(lParam))
-			r.mouseDown = true
-			r.startX, r.startY = x, y
-			procSetCapture.Call(hwnd)
+	case wmMouseMove:
+		if r != nil && r.mouseDown {
+			r.gestures.Move(bomber.MousePointerID, signedWord(lowWord(lParam)), signedWord(highWord(lParam)))
 		}
 		return 0
 	case wmLButtonUp:
 		if r != nil && r.mouseDown {
-			x, y := signedWord(lowWord(lParam)), signedWord(highWord(lParam))
-			r.endGesture(x, y)
 			r.mouseDown = false
 			procReleaseCapture.Call()
+			r.gestures.Up(bomber.MousePointerID, signedWord(lowWord(lParam)), signedWord(highWord(lParam)))
 		}
 		return 0
 	case wmClose:
@@ -265,34 +278,6 @@ func (r *runner) pointerClientPosition(lParam uintptr) (int, int) {
 	return int(p.X), int(p.Y)
 }
 
-func (r *runner) beginPointer(id uint16, x, y int) {
-	r.pointerDown = true
-	r.activePointerID = id
-	r.startX, r.startY = x, y
-	r.lastPointerAt = time.Now()
-}
-
-func (r *runner) mapToLogical(x, y int) (int, int) {
-	w, h := r.clientW, r.clientH
-	if w <= 0 || h <= 0 {
-		return 0, 0
-	}
-	x = maxInt(0, minInt(w-1, x))
-	y = maxInt(0, minInt(h-1, y))
-	return x * r.logicalW / w, y * r.logicalH / h
-}
-
-func (r *runner) endGesture(x, y int) {
-	dx, dy := x-r.startX, y-r.startY
-	threshold := maxInt(32, minInt(r.clientW, r.clientH)/40)
-	if dx*dx+dy*dy >= threshold*threshold {
-		r.app.Swipe(dx, dy)
-		return
-	}
-	ex, ey := r.mapToLogical(x, y)
-	r.app.Tap(ex, ey)
-}
-
 func (r *runner) refreshViewport() {
 	if r.clientW <= 0 || r.clientH <= 0 {
 		var cr rect
@@ -306,6 +291,7 @@ func (r *runner) refreshViewport() {
 		r.renderer = bomber.NewRenderer(lw, lh)
 		r.app.SetViewport(lw, lh)
 	}
+	r.gestures.SetClient(r.clientW, r.clientH)
 }
 
 func (r *runner) draw() {
@@ -322,7 +308,7 @@ func (r *runner) draw() {
 		BitCount:    32,
 		Compression: 0,
 	}}
-	procSetStretchBltMode.Call(r.hdc, halfTone)
+	procSetStretchBltMode.Call(r.hdc, colorOnColor)
 	procStretchDIBits.Call(
 		r.hdc,
 		0, 0, uintptr(r.clientW), uintptr(r.clientH),
@@ -415,7 +401,12 @@ func main() {
 		fatalError("Nie mozna wczytac assets/branding.json", err)
 	}
 	r := &runner{hwnd: hwnd, app: app, logicalW: lw, logicalH: lh, renderer: bomber.NewRenderer(lw, lh), clientW: clientW, clientH: clientH, running: true}
+	r.gestures = bomber.NewGestures(app, clientW, clientH)
 	activeRunner = r
+	if procTimeBeginPeriod.Find() == nil {
+		procTimeBeginPeriod.Call(1)
+		defer procTimeEndPeriod.Call(1)
+	}
 	r.hdc, _, _ = procGetDC.Call(hwnd)
 	if r.hdc == 0 {
 		fatalError("Nie mozna utworzyc powierzchni obrazu", syscall.EINVAL)
@@ -458,6 +449,7 @@ func main() {
 		now := time.Now()
 		dt := now.Sub(last).Seconds()
 		last = now
+		r.gestures.Tick(dt)
 		r.app.Update(dt)
 		r.playSounds()
 		r.draw()

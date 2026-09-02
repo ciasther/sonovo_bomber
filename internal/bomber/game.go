@@ -9,7 +9,7 @@ import (
 const (
 	GridW    = 15
 	GridH    = 13
-	BombFuse = 1.8
+	BombFuse = 1.6
 )
 
 type Cell uint8
@@ -158,6 +158,7 @@ type Game struct {
 	Flash        float64
 	Rng          *rand.Rand
 	queuedMove   Point
+	hold         Point
 	nextID       int
 }
 
@@ -170,7 +171,7 @@ func NewGame(roundSeconds int, seed int64) *Game {
 		Wave:         1,
 		Rng:          rand.New(rand.NewSource(seed)),
 	}
-	g.Player = Player{Mover: Mover{X: 1, Y: 1, ToX: 1, ToY: 1, MoveDuration: .12, MoveT: .12}, Lives: 2, Range: 2, MaxBombs: 1}
+	g.Player = Player{Mover: Mover{X: 1, Y: 1, ToX: 1, ToY: 1, MoveDuration: .12, MoveT: .12}, Lives: 2, Range: 2, MaxBombs: 2}
 	g.generateGrid()
 	g.spawnEnemies(1)
 	return g
@@ -212,12 +213,15 @@ func (g *Game) Swipe(dx, dy int) bool {
 		return false
 	}
 	direction := Point{dx, dy}
+	g.hold = direction
 	if g.Player.IsMoving() {
 		g.queuedMove = direction
 		return true
 	}
 	return g.startMove(direction)
 }
+
+func (g *Game) Release() { g.hold = Point{} }
 
 func (g *Game) startMove(direction Point) bool {
 	dx, dy := direction.X, direction.Y
@@ -262,6 +266,9 @@ func (g *Game) Update(dt float64) {
 		direction := g.queuedMove
 		g.queuedMove = Point{}
 		g.startMove(direction)
+	}
+	if !g.Player.IsMoving() && g.hold != (Point{}) {
+		g.startMove(g.hold)
 	}
 	if g.Player.Invulnerable > 0 {
 		g.Player.Invulnerable -= dt
@@ -463,6 +470,7 @@ func (g *Game) hitPlayer() {
 		return
 	}
 	g.queuedMove = Point{}
+	g.hold = Point{}
 	g.Player.Lives--
 	g.CurrentCombo = 0
 	g.Player.Invulnerable = 2.0

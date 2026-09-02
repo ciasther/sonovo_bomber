@@ -281,6 +281,12 @@ func (a *App) Swipe(dx, dy int) {
 	}
 }
 
+func (a *App) Release() {
+	if a.Game != nil {
+		a.Game.Release()
+	}
+}
+
 func (a *App) handleNickTap(layout Layout, x, y int) {
 	for _, key := range layout.KeyboardKeys {
 		if !containsTouchKey(key.Rect, x, y) {

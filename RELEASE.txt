@@ -3,7 +3,7 @@ BOMBER RUSH - wydanie kioskowe Windows x86-64
 Technologia: Go 1.23, bez zewnetrznych bibliotek i bez CGO.
 Tryb: pelny ekran Win32/GDI, sterowanie dotykowe.
 Plik wykonywalny: dist/BomberRush.exe
-SHA-256: 4a2f1fd98c4e865b2976e8cbc5996ffd224e35d8d05a7f05af648ea854c44d77
+SHA-256: ac04aa3066a1643842f576140b4d25bd3eb8759e1b5aff9ea812bc80fec5bed9
 Konfiguracja partnera: assets/branding.json
 Historia wynikow: data/scores.jsonl
 Weryfikacja: evidence/verification.json

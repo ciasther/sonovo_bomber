@@ -113,6 +113,7 @@ func main() {
 	add("countdown", app.Screen == bomber.ScreenPlay, fmt.Sprintf("screen=%d", app.Screen))
 	beforeX := app.Game.Player.X
 	app.Swipe(400, 0)
+	app.Release()
 	for i := 0; i < 3; i++ {
 		app.Update(.06)
 	}

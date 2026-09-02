@@ -75,3 +75,25 @@ func TestKeyboardAcceptsTouchNearKeyEdge(t *testing.T) {
 		t.Fatalf("nick=%q, oczekiwano %q po dotknieciu przy krawedzi", a.Nick, key.Value)
 	}
 }
+
+func TestCachedRenderMatchesFreshRender(t *testing.T) {
+	a, err := NewApp("../..", 1440, 810)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.PrepareVerificationData()
+	warm := NewRenderer(1440, 810)
+	for i := 0; i < 3; i++ {
+		a.Update(.016)
+		warm.Render(a)
+	}
+	a.Update(.12)
+	a.Game.Grid[3][3] = Floor
+	fresh := NewRenderer(1440, 810).Render(a)
+	cached := warm.Render(a)
+	for i := range fresh.Pix {
+		if fresh.Pix[i] != cached.Pix[i] {
+			t.Fatalf("piksel %d rozni sie: %x vs %x", i, fresh.Pix[i], cached.Pix[i])
+		}
+	}
+}

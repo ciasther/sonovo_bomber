@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [beta]
+    tags-ignore: ['**']
+
+concurrency:
+  group: bomber-rush-beta
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  test-build:
+    runs-on: [self-hosted, windows, nanovo-server]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Testy, vet i build
+        shell: cmd
+        run: build-windows.bat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BomberRush-${{ github.sha }}
+          path: dist/BomberRush.exe
+          if-no-files-found: error
+
+  promote:
+    needs: test-build
+    runs-on: [self-hosted, linux, sonovo-server]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fast-forward main i tag wydania
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="v$(tr -d '[:space:]' < VERSION)"
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          if git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null; then
+            echo "tag $version juz istnieje: podnies VERSION" >&2
+            exit 1
+          fi
+          git fetch origin main
+          git checkout -B main origin/main
+          git merge --ff-only "$GITHUB_SHA"
+          git push origin main
+          git tag -a "$version" -m "BOMBER RUSH $version" "$GITHUB_SHA"
+          git push origin "$version"
+          gh release create "$version" --title "BOMBER RUSH $version" --notes-file RELEASE.txt --target "$GITHUB_SHA"

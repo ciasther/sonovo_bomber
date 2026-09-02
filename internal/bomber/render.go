@@ -234,9 +234,36 @@ func pinRegions(area Rect, margin int) []KeyRegion {
 
 type Renderer struct {
 	Surface *Surface
+	bg      *Surface
+	bgKey   string
+	bgAt    float64
+	grid    *Surface
+	gridKey gridKey
+}
+
+type gridKey struct {
+	grid  [GridH][GridW]Cell
+	w, h  int
+	cell  float64
+	brand string
 }
 
 func NewRenderer(w, h int) *Renderer { return &Renderer{Surface: NewSurface(w, h)} }
+
+func (r *Renderer) blit(src *Surface, ox, oy int) {
+	s := r.Surface
+	for y := 0; y < src.H; y++ {
+		dy := oy + y
+		if dy < 0 || dy >= s.H {
+			continue
+		}
+		x0, x1 := max(0, ox), min(s.W, ox+src.W)
+		if x0 >= x1 {
+			continue
+		}
+		copy(s.Pix[dy*s.W+x0:dy*s.W+x1], src.Pix[y*src.W+x0-ox:y*src.W+x1-ox])
+	}
+}
 
 func (r *Renderer) Render(a *App) *Surface {
 	s := r.Surface
@@ -277,8 +304,27 @@ func (r *Renderer) Render(a *App) *Surface {
 
 func (r *Renderer) drawBackground(a *App) {
 	s := r.Surface
+	withCover := a.Brand.StartBackground != nil && (a.Screen == ScreenAttract || a.Screen == ScreenSummary || a.Screen == ScreenRanking)
+	key := fmt.Sprintf("%dx%d|%v|%s", s.W, s.H, withCover, a.Brand.Fingerprint)
+	// Tło z gradientem, grafiką partnera i poświatami jest kosztowne; odświeżane 10 razy na sekundę.
+	if r.bg == nil || r.bgKey != key || a.TotalTime-r.bgAt >= .1 || a.TotalTime < r.bgAt {
+		r.bg = NewSurface(s.W, s.H)
+		r.bgKey = key
+		r.bgAt = a.TotalTime
+		r.renderBackground(r.bg, a, withCover)
+	}
+	copy(s.Pix, r.bg.Pix)
+	for i := 0; i < 42; i++ {
+		x := (i*197 + int(a.TotalTime*14)*((i%3)+1)) % max(1, s.W)
+		y := (i*113 + i*i*17) % max(1, s.H)
+		rad := 1 + i%3
+		s.FillCircle(x, y, rad, RGB(203, 245, 255).Alpha(uint8(40+i%5*12)))
+	}
+}
+
+func (r *Renderer) renderBackground(s *Surface, a *App, withCover bool) {
 	s.FillGradient(RGB(4, 9, 27), RGB(13, 17, 48))
-	if a.Brand.StartBackground != nil && (a.Screen == ScreenAttract || a.Screen == ScreenSummary || a.Screen == ScreenRanking) {
+	if withCover {
 		s.DrawSpriteCover(a.Brand.StartBackground, Rect{0, 0, s.W, s.H}, 92)
 	}
 	short := min(s.W, s.H)
@@ -297,12 +343,6 @@ func (r *Renderer) drawBackground(a *App) {
 		for k := 5; k >= 1; k-- {
 			s.FillCircle(x, y, rad*k/5, o.c.Alpha(uint8(4+k*3)))
 		}
-	}
-	for i := 0; i < 42; i++ {
-		x := (i*197 + int(a.TotalTime*14)*((i%3)+1)) % max(1, s.W)
-		y := (i*113 + i*i*17) % max(1, s.H)
-		rad := 1 + i%3
-		s.FillCircle(x, y, rad, RGB(203, 245, 255).Alpha(uint8(40+i%5*12)))
 	}
 }
 
@@ -443,36 +483,13 @@ func (r *Renderer) drawBoard(a *App, rect Rect) {
 		y1 := oy + int(float64(y+1)*cell)
 		return Rect{x0, y0, x1 - x0, y1 - y0}
 	}
-	for y := 0; y < GridH; y++ {
-		for x := 0; x < GridW; x++ {
-			cr := cellRect(x, y)
-			floor := RGB(10, 23, 50)
-			if (x+y)%2 == 0 {
-				floor = RGB(12, 28, 58)
-			}
-			s.FillRect(cr, floor)
-			s.FillRect(Rect{cr.X + 2, cr.Y + 2, max(1, cr.W-4), 1}, RGB(55, 91, 126).Alpha(45))
-			s.FillRect(Rect{cr.X, cr.Bottom() - 1, cr.W, 1}, RGB(37, 65, 93).Alpha(90))
-			s.FillRect(Rect{cr.Right() - 1, cr.Y, 1, cr.H}, RGB(37, 65, 93).Alpha(70))
-			switch g.Grid[y][x] {
-			case Wall:
-				in := max(3, cr.W/12)
-				rr := cr.Inset(in)
-				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/6), RGB(2, 7, 20).Alpha(100))
-				s.FillRoundRect(rr, max(5, rr.W/6), RGB(24, 46, 80))
-				s.FillRoundRect(Rect{rr.X + rr.W/8, rr.Y + rr.H/9, rr.W * 3 / 4, rr.H / 5}, rr.H/10, RGB(70, 111, 151).Alpha(150))
-				s.OutlineRoundRect(rr, max(5, rr.W/6), max(1, rr.W/40), a.Brand.Primary.Alpha(80))
-			case Crate:
-				in := max(4, cr.W/10)
-				rr := cr.Inset(in)
-				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/7), RGB(2, 7, 20).Alpha(120))
-				s.FillRoundRect(rr, max(5, rr.W/7), RGB(94, 50, 37))
-				s.OutlineRoundRect(rr, max(5, rr.W/7), max(2, rr.W/28), a.Brand.Accent.Alpha(230))
-				s.Line(rr.X+rr.W/5, rr.Y+rr.H/5, rr.Right()-rr.W/5, rr.Bottom()-rr.H/5, max(2, rr.W/18), a.Brand.Accent.Alpha(125))
-				s.Line(rr.Right()-rr.W/5, rr.Y+rr.H/5, rr.X+rr.W/5, rr.Bottom()-rr.H/5, max(2, rr.W/18), a.Brand.Accent.Alpha(125))
-			}
-		}
+	key := gridKey{grid: g.Grid, w: gridW, h: gridH, cell: cell, brand: a.Brand.Fingerprint}
+	if r.grid == nil || r.gridKey != key {
+		r.grid = NewSurface(gridW, gridH)
+		r.gridKey = key
+		r.renderGrid(r.grid, a, cell)
 	}
+	r.blit(r.grid, ox, oy)
 	// pickups
 	for _, p := range g.Pickups {
 		cr := cellRect(p.X, p.Y)
@@ -635,6 +652,45 @@ func (r *Renderer) drawBoard(a *App, rect Rect) {
 	}
 }
 
+func (r *Renderer) renderGrid(s *Surface, a *App, cell float64) {
+	g := a.Game
+	cellRect := func(x, y int) Rect {
+		x0 := int(float64(x) * cell)
+		y0 := int(float64(y) * cell)
+		return Rect{x0, y0, int(float64(x+1)*cell) - x0, int(float64(y+1)*cell) - y0}
+	}
+	for y := 0; y < GridH; y++ {
+		for x := 0; x < GridW; x++ {
+			cr := cellRect(x, y)
+			floor := RGB(10, 23, 50)
+			if (x+y)%2 == 0 {
+				floor = RGB(12, 28, 58)
+			}
+			s.FillRect(cr, floor)
+			s.FillRect(Rect{cr.X + 2, cr.Y + 2, max(1, cr.W-4), 1}, RGB(55, 91, 126).Alpha(45))
+			s.FillRect(Rect{cr.X, cr.Bottom() - 1, cr.W, 1}, RGB(37, 65, 93).Alpha(90))
+			s.FillRect(Rect{cr.Right() - 1, cr.Y, 1, cr.H}, RGB(37, 65, 93).Alpha(70))
+			switch g.Grid[y][x] {
+			case Wall:
+				in := max(3, cr.W/12)
+				rr := cr.Inset(in)
+				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/6), RGB(2, 7, 20).Alpha(100))
+				s.FillRoundRect(rr, max(5, rr.W/6), RGB(24, 46, 80))
+				s.FillRoundRect(Rect{rr.X + rr.W/8, rr.Y + rr.H/9, rr.W * 3 / 4, rr.H / 5}, rr.H/10, RGB(70, 111, 151).Alpha(150))
+				s.OutlineRoundRect(rr, max(5, rr.W/6), max(1, rr.W/40), a.Brand.Primary.Alpha(80))
+			case Crate:
+				in := max(4, cr.W/10)
+				rr := cr.Inset(in)
+				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/7), RGB(2, 7, 20).Alpha(120))
+				s.FillRoundRect(rr, max(5, rr.W/7), RGB(94, 50, 37))
+				s.OutlineRoundRect(rr, max(5, rr.W/7), max(2, rr.W/28), a.Brand.Accent.Alpha(230))
+				s.Line(rr.X+rr.W/5, rr.Y+rr.H/5, rr.Right()-rr.W/5, rr.Bottom()-rr.H/5, max(2, rr.W/18), a.Brand.Accent.Alpha(125))
+				s.Line(rr.Right()-rr.W/5, rr.Y+rr.H/5, rr.X+rr.W/5, rr.Bottom()-rr.H/5, max(2, rr.W/18), a.Brand.Accent.Alpha(125))
+			}
+		}
+	}
+}
+
 func (r *Renderer) drawHUD(a *App, rect Rect) {
 	g := a.Game
 	if g == nil {
@@ -686,7 +742,7 @@ func (r *Renderer) drawPlayHint(a *App, rect Rect) {
 	s := r.Surface
 	s.FillRoundRect(rect, max(14, rect.H/5), RGB(8, 16, 38).Alpha(225))
 	s.OutlineRoundRect(rect, max(14, rect.H/5), 2, a.Brand.Primary.Alpha(150))
-	s.DrawTextCentered(rect.Inset(10), clamp(rect.H/4, 16, 28), "PRZESUN: RUCH   |   DOTKNIJ: BOMBA", RGB(226, 241, 255))
+	s.DrawTextCentered(rect.Inset(10), clamp(rect.H/4, 16, 28), "PRZESUN I TRZYMAJ: RUCH   |   DOTKNIJ: BOMBA", RGB(226, 241, 255))
 }
 
 func (r *Renderer) drawStatCard(rect Rect, label, value string, c Color) {

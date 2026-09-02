@@ -182,6 +182,7 @@ func TestSwipeQueuesNextMoveDuringAnimation(t *testing.T) {
 	if !g.Swipe(1, 0) || !g.Swipe(1, 0) {
 		t.Fatal("ruch nie zostal przyjety podczas animacji")
 	}
+	g.Release()
 	for i := 0; i < 3; i++ {
 		g.Update(.05)
 	}
@@ -193,5 +194,70 @@ func TestSwipeQueuesNextMoveDuringAnimation(t *testing.T) {
 	}
 	if g.Player.X != 3 || g.Player.IsMoving() {
 		t.Fatalf("drugi ruch nie zostal wykonany: x=%d moving=%v", g.Player.X, g.Player.IsMoving())
+	}
+}
+
+func openGrid(g *Game) {
+	for y := 0; y < GridH; y++ {
+		for x := 0; x < GridW; x++ {
+			if x == 0 || y == 0 || x == GridW-1 || y == GridH-1 {
+				g.Grid[y][x] = Wall
+			} else {
+				g.Grid[y][x] = Floor
+			}
+		}
+	}
+	g.Enemies = nil
+}
+
+func TestHeldSwipeKeepsWalkingUntilRelease(t *testing.T) {
+	g := NewGame(75, 12)
+	openGrid(g)
+	g.Swipe(1, 0)
+	for i := 0; i < 10; i++ {
+		g.Update(.05)
+	}
+	if g.Player.X < 4 {
+		t.Fatalf("przytrzymany gest nie prowadzi dalej: x=%d", g.Player.X)
+	}
+	g.Release()
+	for i := 0; i < 10; i++ {
+		g.Update(.05)
+	}
+	stopped := g.Player.X
+	for i := 0; i < 10; i++ {
+		g.Update(.05)
+	}
+	if g.Player.X != stopped || g.Player.IsMoving() {
+		t.Fatalf("po zwolnieniu postac dalej idzie: x=%d", g.Player.X)
+	}
+}
+
+func TestHitClearsHeldDirection(t *testing.T) {
+	g := NewGame(75, 13)
+	openGrid(g)
+	g.Swipe(0, 1)
+	g.hitPlayer()
+	if g.hold != (Point{}) {
+		t.Fatal("trafienie nie zatrzymalo marszu")
+	}
+}
+
+func TestTwoBombsAtStart(t *testing.T) {
+	g := NewGame(75, 14)
+	openGrid(g)
+	if !g.PlaceBomb() {
+		t.Fatal("pierwsza bomba odrzucona")
+	}
+	g.Swipe(1, 0)
+	g.Release()
+	for i := 0; i < 4; i++ {
+		g.Update(.05)
+	}
+	if !g.PlaceBomb() {
+		t.Fatal("druga bomba odrzucona")
+	}
+	if g.PlaceBomb() {
+		t.Fatal("trzecia bomba przyjeta ponad limit")
 	}
 }
