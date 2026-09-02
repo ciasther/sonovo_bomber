@@ -61,7 +61,7 @@ Wynikiem jest `dist/BomberRush.exe`.
 
 ## CI
 
-Push na `beta` uruchamia `.github/workflows/ci.yml` na runnerach self-hosted: testy, `go vet`, build `dist/BomberRush.exe` jako artefakt. Po zielonym buildzie workflow fast-forwarduje `main`, tworzy tag `vX.Y.Z` z pliku `VERSION` i publikuje release z `.exe`. Numer w `VERSION` podnosi się przed wydaniem.
+Push na `beta` uruchamia `.github/workflows/ci.yml` na runnerach self-hosted: testy, `go vet`, build `dist/BomberRush.exe` i paczkę `BomberRush.exe` + `assets/` jako artefakt. Po zielonym buildzie workflow fast-forwarduje `main`, tworzy tag `vX.Y.Z` z pliku `VERSION` i publikuje release z jednym plikiem `BomberRush-vX.Y.Z-windows-amd64.zip`. Numer w `VERSION` podnosi się przed wydaniem.
 
 ## Weryfikacja deweloperska
 

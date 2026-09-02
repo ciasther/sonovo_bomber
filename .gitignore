@@ -1,3 +1,5 @@
 dist/
+package/
+BomberRush-*.zip
 data/*.jsonl
 bomber-rush-error.log

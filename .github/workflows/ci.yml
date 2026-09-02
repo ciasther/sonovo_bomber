@@ -22,10 +22,17 @@ jobs:
       - name: Testy, vet i build
         shell: cmd
         run: build-windows.bat
+      - name: Paczka wydania
+        shell: cmd
+        run: |
+          if exist package rmdir /s /q package
+          mkdir package || exit /b 1
+          copy /y dist\BomberRush.exe package\ || exit /b 1
+          xcopy /e /i /y assets package\assets || exit /b 1
       - uses: actions/upload-artifact@v4
         with:
           name: BomberRush-${{ github.sha }}
-          path: dist/BomberRush.exe
+          path: package
           if-no-files-found: error
 
   promote:
@@ -35,6 +42,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: BomberRush-${{ github.sha }}
+          path: package
       - name: Fast-forward main i tag wydania
         env:
           GH_TOKEN: ${{ github.token }}
@@ -47,10 +58,13 @@ jobs:
             echo "tag $version juz istnieje: podnies VERSION" >&2
             exit 1
           fi
+          zip_name="BomberRush-$version-windows-amd64.zip"
+          rm -f "$zip_name"
+          (cd package && zip -qr "../$zip_name" .)
           git fetch origin main
           git checkout -B main origin/main
           git merge --ff-only "$GITHUB_SHA"
           git push origin main
           git tag -a "$version" -m "BOMBER RUSH $version" "$GITHUB_SHA"
           git push origin "$version"
-          gh release create "$version" --title "BOMBER RUSH $version" --notes-file RELEASE.txt --target "$GITHUB_SHA"
+          gh release create "$version" --title "BOMBER RUSH $version" --notes-file RELEASE.txt --target "$GITHUB_SHA" "$zip_name"

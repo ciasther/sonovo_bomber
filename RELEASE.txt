@@ -2,11 +2,12 @@ BOMBER RUSH - wydanie kioskowe Windows x86-64
 
 Technologia: Go 1.23, bez zewnetrznych bibliotek i bez CGO.
 Tryb: pelny ekran Win32/GDI, sterowanie dotykowe.
-Plik wykonywalny: dist/BomberRush.exe
-SHA-256: ac04aa3066a1643842f576140b4d25bd3eb8759e1b5aff9ea812bc80fec5bed9
+
+Paczka wydania: BomberRush-vX.Y.Z-windows-amd64.zip
+Zawartosc: BomberRush.exe oraz assets/.
+Instalacja: rozpakuj katalog i uruchom BomberRush.exe.
 Konfiguracja partnera: assets/branding.json
-Historia wynikow: data/scores.jsonl
-Weryfikacja: evidence/verification.json
+Historia wynikow: data/scores.jsonl - katalog powstaje obok exe przy pierwszym zapisie.
 
 Ograniczenie weryfikacji: Windows PE zbudowano i sprawdzono strukturalnie,
 ale nie uruchomiono go w Windows/Wine z powodu braku takiego srodowiska.
