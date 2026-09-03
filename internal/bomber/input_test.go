@@ -119,3 +119,18 @@ func TestHoldExpiresWithoutPointerEvents(t *testing.T) {
 		t.Fatal("oderwanie po timeout podlozylo bombe")
 	}
 }
+
+func TestShortGestureStartsWalk(t *testing.T) {
+	g := NewGame(75, 21)
+	openGrid(g)
+	a := &App{Screen: ScreenPlay, ViewW: 1440, ViewH: 810, Game: g}
+	gs := NewGestures(a, 1920, 1080)
+	if gs.Threshold() > 20 {
+		t.Fatalf("prog gestu za duzy dla lekkiego ruchu: %d", gs.Threshold())
+	}
+	gs.Down(1, 900, 500)
+	gs.Move(1, 920, 500)
+	if !g.Player.IsMoving() || g.Player.ToX != 2 {
+		t.Fatalf("krotki gest nie ruszyl postaci: moving=%v to=%d", g.Player.IsMoving(), g.Player.ToX)
+	}
+}

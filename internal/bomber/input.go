@@ -30,7 +30,7 @@ func (t *Gestures) SetClient(w, h int) {
 }
 
 func (t *Gestures) Threshold() int {
-	return max(32, min(t.ClientW, t.ClientH)/40)
+	return max(14, min(t.ClientW, t.ClientH)/90)
 }
 
 func (t *Gestures) Active() bool { return t.primary != nil }

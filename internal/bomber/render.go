@@ -524,6 +524,7 @@ func (r *Renderer) drawBoard(a *App, rect Rect) {
 		fraction := clampFloat(b.Fuse/BombFuse, 0, 1)
 		pulse := 1 + .08*math.Sin((BombFuse-b.Fuse)*15)
 		rad := int(float64(min(cr.W, cr.H)) * .29 * pulse)
+		s.SoftShadow(cx, cy+rad/2, rad*3/4, 120)
 		s.GlowCircle(cx, cy, rad, RGB(255, 72, 96).Alpha(uint8(30+int((1-fraction)*70))))
 		s.FillCircle(cx, cy, rad, RGB(8, 11, 23))
 		s.Ring(cx, cy, rad, max(2, rad/7), Mix(a.Brand.Primary, RGB(255, 72, 96), 1-fraction))
@@ -542,9 +543,10 @@ func (r *Renderer) drawBoard(a *App, rect Rect) {
 		alpha := uint8(230 * (1 - progress))
 		for _, p := range e.Cells {
 			cr := cellRect(p.X, p.Y).Inset(max(1, int(cell*.04)))
-			s.FillRoundRect(cr, max(4, cr.W/4), RGB(255, 108, 43).Alpha(alpha))
+			s.FillRoundRect(cr.Inset(-max(2, cr.W/8)), max(6, cr.W/2), RGB(255, 108, 43).Alpha(alpha/5))
+			s.FillRoundRect(cr, max(4, cr.W/3), RGB(255, 108, 43).Alpha(alpha))
 			inner := cr.Inset(max(2, cr.W/5))
-			s.FillRoundRect(inner, max(2, inner.W/4), RGB(255, 244, 171).Alpha(uint8(min(255, int(alpha)+25))))
+			s.FillRoundRect(inner, max(2, inner.W/3), RGB(255, 244, 171).Alpha(uint8(min(255, int(alpha)+25))))
 		}
 	}
 	// enemies
@@ -555,8 +557,10 @@ func (r *Renderer) drawBoard(a *App, rect Rect) {
 		x, y := e.Visual()
 		cx := ox + int((x+.5)*cell)
 		cy := oy + int((y+.5)*cell)
+		groundY := cy + int(cell*.42)
 		cy -= int(math.Abs(math.Sin(a.TotalTime*7+e.PulseOffset)) * cell * .045)
 		rad := int(cell * (.27 + .025*math.Sin(a.TotalTime*6+e.PulseOffset)))
+		s.SoftShadow(cx, groundY, rad*3/4, 100)
 		s.GlowCircle(cx, cy, rad, a.Brand.Secondary.Alpha(70))
 		unit := max(2, rad/6)
 		bodyW, bodyH := rad*2, rad*2
@@ -584,12 +588,14 @@ func (r *Renderer) drawBoard(a *App, rect Rect) {
 	px, py := g.Player.Visual()
 	pcx := ox + int((px+.5)*cell)
 	pcy := oy + int((py+.5)*cell)
+	playerGroundY := pcy + int(cell*.44)
 	if g.Player.IsMoving() {
 		pcy -= int(math.Abs(math.Sin(a.TotalTime*30)) * cell * .06)
 	}
 	pr := int(cell * .31)
 	visible := g.Player.Invulnerable <= 0 || int(g.Player.Invulnerable*10)%2 == 0
 	if visible {
+		s.SoftShadow(pcx, playerGroundY, pr*3/4, 100)
 		s.GlowCircle(pcx, pcy, pr, a.Brand.Primary.Alpha(76))
 		// Charakter ma czytelny profil Bombermana nawet przy małym rozmiarze pola.
 		unit := max(2, pr/7)
@@ -666,24 +672,24 @@ func (r *Renderer) renderGrid(s *Surface, a *App, cell float64) {
 			if (x+y)%2 == 0 {
 				floor = RGB(12, 28, 58)
 			}
-			s.FillRect(cr, floor)
-			s.FillRect(Rect{cr.X + 2, cr.Y + 2, max(1, cr.W-4), 1}, RGB(55, 91, 126).Alpha(45))
-			s.FillRect(Rect{cr.X, cr.Bottom() - 1, cr.W, 1}, RGB(37, 65, 93).Alpha(90))
-			s.FillRect(Rect{cr.Right() - 1, cr.Y, 1, cr.H}, RGB(37, 65, 93).Alpha(70))
+			s.FillRect(cr, RGB(6, 15, 36))
+			tile := cr.Inset(max(1, cr.W/28))
+			s.FillRoundRect(tile, max(4, tile.W/7), floor)
+			s.FillRoundRect(Rect{tile.X + tile.W/5, tile.Y + max(1, tile.H/16), tile.W * 3 / 5, max(1, tile.H/14)}, max(1, tile.H/28), RGB(70, 111, 151).Alpha(38))
 			switch g.Grid[y][x] {
 			case Wall:
 				in := max(3, cr.W/12)
 				rr := cr.Inset(in)
-				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/6), RGB(2, 7, 20).Alpha(100))
-				s.FillRoundRect(rr, max(5, rr.W/6), RGB(24, 46, 80))
-				s.FillRoundRect(Rect{rr.X + rr.W/8, rr.Y + rr.H/9, rr.W * 3 / 4, rr.H / 5}, rr.H/10, RGB(70, 111, 151).Alpha(150))
-				s.OutlineRoundRect(rr, max(5, rr.W/6), max(1, rr.W/40), a.Brand.Primary.Alpha(80))
+				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/4), RGB(2, 7, 20).Alpha(100))
+				s.FillRoundRect(rr, max(5, rr.W/4), RGB(24, 46, 80))
+				s.FillRoundRect(Rect{rr.X + rr.W/8, rr.Y + rr.H/9, rr.W * 3 / 4, rr.H / 5}, rr.H/8, RGB(70, 111, 151).Alpha(150))
+				s.OutlineRoundRect(rr, max(5, rr.W/4), max(1, rr.W/40), a.Brand.Primary.Alpha(80))
 			case Crate:
 				in := max(4, cr.W/10)
 				rr := cr.Inset(in)
-				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/7), RGB(2, 7, 20).Alpha(120))
-				s.FillRoundRect(rr, max(5, rr.W/7), RGB(94, 50, 37))
-				s.OutlineRoundRect(rr, max(5, rr.W/7), max(2, rr.W/28), a.Brand.Accent.Alpha(230))
+				s.FillRoundRect(Rect{rr.X + in/2, rr.Y + in, rr.W, rr.H}, max(5, rr.W/4), RGB(2, 7, 20).Alpha(120))
+				s.FillRoundRect(rr, max(5, rr.W/4), RGB(94, 50, 37))
+				s.OutlineRoundRect(rr, max(5, rr.W/4), max(2, rr.W/28), a.Brand.Accent.Alpha(230))
 				s.Line(rr.X+rr.W/5, rr.Y+rr.H/5, rr.Right()-rr.W/5, rr.Bottom()-rr.H/5, max(2, rr.W/18), a.Brand.Accent.Alpha(125))
 				s.Line(rr.Right()-rr.W/5, rr.Y+rr.H/5, rr.X+rr.W/5, rr.Bottom()-rr.H/5, max(2, rr.W/18), a.Brand.Accent.Alpha(125))
 			}

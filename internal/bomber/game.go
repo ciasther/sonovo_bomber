@@ -10,6 +10,8 @@ const (
 	GridW    = 15
 	GridH    = 13
 	BombFuse = 1.6
+	// Tempo symulacji jest niezależne od FPS; zegar rundy zostaje w czasie rzeczywistym.
+	GameSpeed = .9
 )
 
 type Cell uint8
@@ -261,6 +263,7 @@ func (g *Game) Update(dt float64) {
 		dt = .05
 	}
 	g.Elapsed += dt
+	dt *= GameSpeed
 	g.Player.Step(dt)
 	if !g.Player.IsMoving() && g.queuedMove != (Point{}) {
 		direction := g.queuedMove

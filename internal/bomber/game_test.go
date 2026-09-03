@@ -1,6 +1,7 @@
 package bomber
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -259,5 +260,19 @@ func TestTwoBombsAtStart(t *testing.T) {
 	}
 	if g.PlaceBomb() {
 		t.Fatal("trzecia bomba przyjeta ponad limit")
+	}
+}
+
+func TestSimulationTempoIsSlowerThanRoundClock(t *testing.T) {
+	g := NewGame(75, 5)
+	if !g.PlaceBomb() {
+		t.Fatal("bomba nie zostala ustawiona")
+	}
+	g.Update(.05)
+	if math.Abs(g.Elapsed-.05) > 1e-9 {
+		t.Fatalf("zegar rundy nie idzie w czasie rzeczywistym: %v", g.Elapsed)
+	}
+	if math.Abs(g.Bombs[0].Fuse-(BombFuse-.05*GameSpeed)) > 1e-9 {
+		t.Fatalf("lont nie zwolnil o GameSpeed: %v", g.Bombs[0].Fuse)
 	}
 }

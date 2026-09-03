@@ -143,66 +143,124 @@ func (s *Surface) FillGradient(top, bottom Color) {
 	}
 }
 
+// Wygładzone krawędzie kształtów rysujemy pokryciem piksela zamiast twardego progu.
+func (s *Surface) blendCoverage(x, y int, cov float64, c Color) {
+	if cov <= 0 {
+		return
+	}
+	if cov > 1 {
+		cov = 1
+	}
+	s.Set(x, y, c.Alpha(uint8(float64(c.A())*cov+.5)))
+}
+
+func (s *Surface) arcQuadrant(box Rect, ccx, ccy, rOuter, rInner float64, c Color) {
+	for y := max(0, box.Y); y < min(s.H, box.Bottom()); y++ {
+		fy := float64(y) - ccy
+		for x := max(0, box.X); x < min(s.W, box.Right()); x++ {
+			d := math.Hypot(float64(x)-ccx, fy)
+			s.blendCoverage(x, y, math.Min(rOuter+.5-d, d-rInner+.5), c)
+		}
+	}
+}
+
 func (s *Surface) FillRoundRect(r Rect, radius int, c Color) {
+	if r.W <= 0 || r.H <= 0 {
+		return
+	}
+	radius = min(radius, min(r.W, r.H)/2)
 	if radius <= 0 {
 		s.FillRect(r, c)
 		return
 	}
-	radius = min(radius, min(r.W, r.H)/2)
+	fr := float64(radius)
 	for yy := 0; yy < r.H; yy++ {
 		y := r.Y + yy
 		if y < 0 || y >= s.H {
 			continue
 		}
-		inset := 0
+		xL := -.5
 		if yy < radius {
-			dy := float64(radius-yy) - .5
-			inset = int(math.Ceil(float64(radius) - math.Sqrt(maxFloat(0, float64(radius*radius)-dy*dy))))
+			dy := fr - .5 - float64(yy)
+			xL = fr - .5 - math.Sqrt(maxFloat(0, fr*fr-dy*dy))
 		} else if yy >= r.H-radius {
-			dy := float64(yy-(r.H-radius-1)) - .5
-			inset = int(math.Ceil(float64(radius) - math.Sqrt(maxFloat(0, float64(radius*radius)-dy*dy))))
+			dy := float64(yy) - (float64(r.H-radius) - .5)
+			xL = fr - .5 - math.Sqrt(maxFloat(0, fr*fr-dy*dy))
 		}
-		s.FillRect(Rect{r.X + inset, y, r.W - 2*inset, 1}, c)
+		xR := float64(r.W-1) - xL
+		i0 := max(0, int(math.Ceil(xL+.5)))
+		i1 := min(r.W-1, int(math.Floor(xR-.5)))
+		if i0 <= i1 {
+			s.FillRect(Rect{r.X + i0, y, i1 - i0 + 1, 1}, c)
+		}
+		for i := i0 - 2; i < i0; i++ {
+			if i >= 0 && i < r.W {
+				s.blendCoverage(r.X+i, y, float64(i)-xL+.5, c)
+			}
+		}
+		for i := i1 + 1; i <= i1+2; i++ {
+			if i >= 0 && i < r.W {
+				s.blendCoverage(r.X+i, y, xR-float64(i)+.5, c)
+			}
+		}
 	}
 }
 
 func (s *Surface) OutlineRoundRect(r Rect, radius, width int, c Color) {
-	if width <= 0 {
+	if width <= 0 || r.W <= 0 || r.H <= 0 {
 		return
 	}
-	for i := 0; i < width; i++ {
-		rr := r.Inset(i)
-		rad := max(0, radius-i)
-		for x := rr.X + rad; x < rr.Right()-rad; x++ {
-			s.Set(x, rr.Y, c)
-			s.Set(x, rr.Bottom()-1, c)
-		}
-		for y := rr.Y + rad; y < rr.Bottom()-rad; y++ {
-			s.Set(rr.X, y, c)
-			s.Set(rr.Right()-1, y, c)
-		}
-		cx1, cy1 := rr.X+rad, rr.Y+rad
-		cx2, cy2 := rr.Right()-rad-1, rr.Bottom()-rad-1
-		for a := 0; a <= 90; a++ {
-			t := float64(a) * math.Pi / 180
-			dx := int(math.Round(float64(rad) * math.Cos(t)))
-			dy := int(math.Round(float64(rad) * math.Sin(t)))
-			s.Set(cx2+dx, cy1-dy, c)
-			s.Set(cx1-dx, cy1-dy, c)
-			s.Set(cx1-dx, cy2+dy, c)
-			s.Set(cx2+dx, cy2+dy, c)
-		}
+	radius = clamp(radius, 0, min(r.W, r.H)/2)
+	if 2*width >= min(r.W, r.H) {
+		s.FillRoundRect(r, radius, c)
+		return
 	}
+	s.FillRect(Rect{r.X + radius, r.Y, r.W - 2*radius, width}, c)
+	s.FillRect(Rect{r.X + radius, r.Bottom() - width, r.W - 2*radius, width}, c)
+	s.FillRect(Rect{r.X, r.Y + radius, width, r.H - 2*radius}, c)
+	s.FillRect(Rect{r.Right() - width, r.Y + radius, width, r.H - 2*radius}, c)
+	if radius == 0 {
+		return
+	}
+	rOuter, rInner := float64(radius), float64(radius-width)
+	lx, rx := float64(r.X+radius)-.5, float64(r.Right()-radius)-.5
+	ty, by := float64(r.Y+radius)-.5, float64(r.Bottom()-radius)-.5
+	s.arcQuadrant(Rect{r.X, r.Y, radius, radius}, lx, ty, rOuter, rInner, c)
+	s.arcQuadrant(Rect{r.Right() - radius, r.Y, radius, radius}, rx, ty, rOuter, rInner, c)
+	s.arcQuadrant(Rect{r.X, r.Bottom() - radius, radius, radius}, lx, by, rOuter, rInner, c)
+	s.arcQuadrant(Rect{r.Right() - radius, r.Bottom() - radius, radius, radius}, rx, by, rOuter, rInner, c)
 }
 
 func (s *Surface) FillCircle(cx, cy, radius int, c Color) {
 	if radius <= 0 {
 		return
 	}
-	r2 := radius * radius
-	for dy := -radius; dy <= radius; dy++ {
-		dx := int(math.Sqrt(float64(max(0, r2-dy*dy))))
-		s.FillRect(Rect{cx - dx, cy + dy, dx*2 + 1, 1}, c)
+	rOut, rIn := float64(radius)+.5, float64(radius)-.5
+	for dy := -radius - 1; dy <= radius+1; dy++ {
+		y := cy + dy
+		if y < 0 || y >= s.H {
+			continue
+		}
+		fy := float64(dy)
+		ov := rOut*rOut - fy*fy
+		if ov <= 0 {
+			continue
+		}
+		xo := int(math.Ceil(math.Sqrt(ov)))
+		solid := -1
+		if iv := rIn*rIn - fy*fy; iv > 0 {
+			solid = int(math.Floor(math.Sqrt(iv)))
+		}
+		if solid >= 0 {
+			s.FillRect(Rect{cx - solid, y, solid*2 + 1, 1}, c)
+		}
+		for dx := solid + 1; dx <= xo; dx++ {
+			cov := rOut - math.Hypot(float64(dx), fy)
+			s.blendCoverage(cx-dx, y, cov, c)
+			if dx != 0 {
+				s.blendCoverage(cx+dx, y, cov, c)
+			}
+		}
 	}
 }
 
@@ -210,21 +268,48 @@ func (s *Surface) Ring(cx, cy, radius, width int, c Color) {
 	if width <= 0 || radius <= 0 {
 		return
 	}
-	rOuter2 := radius * radius
-	rInner := max(0, radius-width)
-	rInner2 := rInner * rInner
-	for dy := -radius; dy <= radius; dy++ {
-		outer := int(math.Sqrt(float64(max(0, rOuter2-dy*dy))))
-		inner := -1
-		if abs(dy) <= rInner {
-			inner = int(math.Sqrt(float64(max(0, rInner2-dy*dy))))
+	if width >= radius {
+		s.FillCircle(cx, cy, radius, c)
+		return
+	}
+	rOuter, rInner := float64(radius), float64(radius-width)
+	for dy := -radius - 1; dy <= radius+1; dy++ {
+		y := cy + dy
+		if y < 0 || y >= s.H {
+			continue
 		}
-		if inner < 0 {
-			s.FillRect(Rect{cx - outer, cy + dy, outer*2 + 1, 1}, c)
+		fy := float64(dy)
+		ov := (rOuter+.5)*(rOuter+.5) - fy*fy
+		if ov <= 0 {
+			continue
+		}
+		xo := int(math.Ceil(math.Sqrt(ov)))
+		hole := -1
+		if iv := (rInner-.5)*(rInner-.5) - fy*fy; iv > 0 {
+			hole = int(math.Floor(math.Sqrt(iv)))
+		}
+		band := func(from, to int) {
+			for dx := from; dx <= to; dx++ {
+				d := math.Hypot(float64(dx), fy)
+				s.blendCoverage(cx+dx, y, math.Min(rOuter+.5-d, d-rInner+.5), c)
+			}
+		}
+		if hole <= 0 {
+			band(-xo, xo)
 		} else {
-			s.FillRect(Rect{cx - outer, cy + dy, outer - inner, 1}, c)
-			s.FillRect(Rect{cx + inner + 1, cy + dy, outer - inner, 1}, c)
+			band(-xo, -hole)
+			band(hole, xo)
 		}
+	}
+}
+
+// Miękki cień pod obiektem planszy; warstwy okręgów dają rozmycie bez osobnego bufora.
+func (s *Surface) SoftShadow(cx, cy, radius int, strength uint8) {
+	if radius <= 0 || strength == 0 {
+		return
+	}
+	for i := 3; i >= 1; i-- {
+		s.FillCircle(cx, cy, radius+i*max(1, radius/5), RGBA(0, 0, 0, uint8(int(strength)/(i+1))))
 	}
 }
 
