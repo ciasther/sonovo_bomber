@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-03T14:07:42+02:00",
+  "generated_at": "2026-09-04T12:13:49+02:00",
   "checks": [
     {
       "name": "logical-landscape",
@@ -25,6 +25,11 @@
       "name": "layouts-in-bounds",
       "passed": true,
       "detail": "wszystkie kluczowe prostokaty mieszcza sie w pionie i poziomie"
+    },
+    {
+      "name": "font-metrics-match",
+      "passed": true,
+      "detail": "narysowane piksele mieszcza sie w polu z TextWidth"
     },
     {
       "name": "windows-pe64-gui",
@@ -62,6 +67,11 @@
       "detail": "bombs=1"
     },
     {
+      "name": "joystick-direction",
+      "passed": true,
+      "detail": "martwa strefa=8 px, start x=5"
+    },
+    {
       "name": "ranking-persistence",
       "passed": true,
       "detail": "entries=10"
@@ -74,12 +84,12 @@
     {
       "name": "exe-unchanged-during-brand-swap",
       "passed": true,
-      "detail": "sha256=bf7d765cb8550958c0c1ee15f7e936135467d1ff47ca5fb1c168dc89b73619e1"
+      "detail": "sha256=728f21117ba68f1a73c5bc25d5b54bfbf96a8fcefee9bc15971264ba018cea7b"
     },
     {
       "name": "renderer-performance",
       "passed": true,
-      "detail": "avg=5.20ms p95=7.05ms"
+      "detail": "avg=5.28ms p95=6.81ms"
     }
   ],
   "screenshots": {
@@ -95,13 +105,13 @@
     "start_landscape_4k": "01-start-landscape-4k.png",
     "summary_portrait_4k": "06-summary-portrait-4k.png"
   },
-  "render_average_ms": 5.1983,
-  "render_p95_ms": 7.046,
-  "brand_fingerprint_before": "18aa7bf10824ff96",
-  "brand_fingerprint_after": "d9504ca08460dedd",
+  "render_average_ms": 5.2848,
+  "render_p95_ms": 6.814,
+  "brand_fingerprint_before": "165ed5075261e07f",
+  "brand_fingerprint_after": "3b536cf670515bc6",
   "partner_logo_sha256_before": "92c1b6b693984d2273bcc5009a8094ba3dc6448924109fa23b8f458d85e85906",
   "partner_logo_sha256_after": "00944fe708078bafce13b5fd542e9e2c2100474a2e2b0771875485dcd968e921",
-  "exe_sha256_before": "bf7d765cb8550958c0c1ee15f7e936135467d1ff47ca5fb1c168dc89b73619e1",
-  "exe_sha256_after": "bf7d765cb8550958c0c1ee15f7e936135467d1ff47ca5fb1c168dc89b73619e1",
-  "exe_size_bytes": 2969600
+  "exe_sha256_before": "728f21117ba68f1a73c5bc25d5b54bfbf96a8fcefee9bc15971264ba018cea7b",
+  "exe_sha256_after": "728f21117ba68f1a73c5bc25d5b54bfbf96a8fcefee9bc15971264ba018cea7b",
+  "exe_size_bytes": 3061248
 }

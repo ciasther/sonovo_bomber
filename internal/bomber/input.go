@@ -1,15 +1,20 @@
 package bomber
 
+import "math"
+
 const MousePointerID = -1
 
-type gesturePointer struct {
-	id               int
-	anchorX, anchorY int
-	swiped           bool
-}
+// Marsz wygasa sam, gdy sterownik przestanie słać zdarzenia; palec trzymany bez ruchu ma zapas czasu.
+const HoldTimeout = 8.0
 
-// Przesunięcie działa od razu po progu, bez czekania na oderwanie palca; drugi palec podkłada bombę.
-const HoldTimeout = 3.0
+// Ekran po zmianie stanu przez chwilę nie przyjmuje dotyku, żeby jeden gest nie przeskoczył dwóch ekranów.
+const screenTapLockout = .28
+
+type gesturePointer struct {
+	id     int
+	moved  bool
+	tapped bool
+}
 
 type Gestures struct {
 	App              *App
@@ -29,11 +34,16 @@ func (t *Gestures) SetClient(w, h int) {
 	}
 }
 
-func (t *Gestures) Threshold() int {
-	return max(14, min(t.ClientW, t.ClientH)/90)
+func (t *Gestures) Active() bool { return t.primary != nil }
+
+// Martwa strefa drążka w jednostkach logicznych; celowo mała, by lekki gest wystarczał.
+func (t *Gestures) DeadZone() float64 {
+	return math.Max(8, float64(min(t.App.ViewW, t.App.ViewH))/110)
 }
 
-func (t *Gestures) Active() bool { return t.primary != nil }
+func (t *Gestures) stickRadius() float64 {
+	return math.Max(3*t.DeadZone(), float64(min(t.App.ViewW, t.App.ViewH))/16)
+}
 
 func (t *Gestures) toLogical(x, y int) (int, int) {
 	w, h := t.ClientW, t.ClientH
@@ -45,29 +55,46 @@ func (t *Gestures) toLogical(x, y int) (int, int) {
 	return x * t.App.ViewW / w, y * t.App.ViewH / h
 }
 
-// Bez zdarzenia UP (utrata okna, sterownik) marsz wygasa sam, żeby postać nie szła w nieskończoność.
+func (t *Gestures) playMode() bool {
+	return t.App.Screen == ScreenPlay && t.App.Game != nil
+}
+
 func (t *Gestures) Tick(dt float64) {
 	if t.primary == nil {
 		return
 	}
 	t.idle += dt
 	if t.idle >= HoldTimeout {
-		t.App.Release()
+		// Zatrzymaj marsz, ale zostaw drążek — ruch palca od razu go wznowi.
+		t.App.Stick.DirX, t.App.Stick.DirY = 0, 0
+		if t.App.Game != nil {
+			t.App.Game.Release()
+		}
 	}
 }
 
 func (t *Gestures) Down(id, x, y int) {
 	t.idle = 0
+	lx, ly := t.toLogical(x, y)
 	if t.primary == nil {
-		t.primary = &gesturePointer{id: id, anchorX: x, anchorY: y}
+		p := &gesturePointer{id: id}
+		t.primary = p
+		if t.playMode() {
+			t.App.Stick = Stick{Active: true, AnchorX: float64(lx), AnchorY: float64(ly), X: float64(lx), Y: float64(ly), Radius: t.stickRadius()}
+			return
+		}
+		if t.App.StateAge >= screenTapLockout {
+			p.tapped = true
+			t.App.Tap(lx, ly)
+		}
 		return
 	}
 	if t.primary.id == id {
 		return
 	}
 	t.extras[id] = true
-	if t.App.Screen == ScreenPlay {
-		t.App.Tap(t.toLogical(x, y))
+	if t.playMode() {
+		t.App.Tap(lx, ly)
 	}
 }
 
@@ -77,14 +104,59 @@ func (t *Gestures) Move(id, x, y int) {
 		return
 	}
 	t.idle = 0
-	dx, dy := x-p.anchorX, y-p.anchorY
-	thr := t.Threshold()
-	if dx*dx+dy*dy < thr*thr {
+	if !t.App.Stick.Active {
 		return
 	}
-	p.swiped = true
-	p.anchorX, p.anchorY = x, y
-	t.App.Swipe(dx, dy)
+	lx, ly := t.toLogical(x, y)
+	s := &t.App.Stick
+	s.X, s.Y = float64(lx), float64(ly)
+	dx, dy := s.X-s.AnchorX, s.Y-s.AnchorY
+	if r := math.Hypot(dx, dy); r > s.Radius {
+		// Kotwica podąża za palcem, więc drążek nigdy nie ucieka poza zasięg.
+		s.AnchorX += dx * (1 - s.Radius/r)
+		s.AnchorY += dy * (1 - s.Radius/r)
+		dx, dy = s.X-s.AnchorX, s.Y-s.AnchorY
+	}
+	nx, ny := t.resolveDir(dx, dy)
+	if nx != 0 || ny != 0 {
+		p.moved = true
+	}
+	if nx == s.DirX && ny == s.DirY {
+		return
+	}
+	s.DirX, s.DirY = nx, ny
+	if nx == 0 && ny == 0 {
+		t.App.Release()
+		return
+	}
+	t.App.Swipe(nx, ny)
+}
+
+// Histereza 1.25x: bieżąca oś wygrywa, dopóki druga wyraźnie jej nie przewyższy.
+func (t *Gestures) resolveDir(dx, dy float64) (int, int) {
+	dead := t.DeadZone()
+	if dx*dx+dy*dy < dead*dead {
+		return 0, 0
+	}
+	ax, ay := math.Abs(dx), math.Abs(dy)
+	horizontal := ax >= ay
+	switch {
+	case t.App.Stick.DirX != 0:
+		horizontal = ay <= ax*1.25
+	case t.App.Stick.DirY != 0:
+		horizontal = ax > ay*1.25
+	}
+	if horizontal {
+		return signf(dx), 0
+	}
+	return 0, signf(dy)
+}
+
+func signf(v float64) int {
+	if v < 0 {
+		return -1
+	}
+	return 1
 }
 
 func (t *Gestures) Up(id, x, y int) {
@@ -96,9 +168,12 @@ func (t *Gestures) Up(id, x, y int) {
 	if p == nil || p.id != id {
 		return
 	}
-	t.Move(id, x, y)
-	if !p.swiped {
-		t.App.Tap(t.toLogical(x, y))
+	if t.App.Stick.Active {
+		t.Move(id, x, y)
+		if !p.moved && !p.tapped {
+			lx, ly := t.toLogical(x, y)
+			t.App.Tap(lx, ly)
+		}
 	}
 	t.App.Release()
 	t.primary = nil

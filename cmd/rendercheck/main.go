@@ -71,6 +71,8 @@ func main() {
 	add("nanovo-logo-embedded", app.Logo != nil && !app.LogoMissing, "logo jest dekodowane z zasobu wbudowanego")
 	add("external-branding-loaded", app.Brand.PartnerLogo != nil && app.Brand.StartBackground != nil && app.Brand.SummaryAd != nil && app.Brand.QR != nil && app.Brand.ProductItem != nil, "wszystkie zasoby partnera wczytane z katalogu assets")
 	add("layouts-in-bounds", validateLayouts(), "wszystkie kluczowe prostokaty mieszcza sie w pionie i poziomie")
+	fontOK, fontDetail := validateFontMetrics()
+	add("font-metrics-match", fontOK, fontDetail)
 	exePath := filepath.Join(root, "dist", "BomberRush.exe")
 	peOK, peDetail := validateWindowsPE(exePath)
 	add("windows-pe64-gui", peOK, peDetail)
@@ -121,6 +123,8 @@ func main() {
 	app.Tap(landW/2, landH/2)
 	add("touch-swipe", moved, fmt.Sprintf("x=%d->%d", beforeX, app.Game.Player.X))
 	add("touch-bomb", len(app.Game.Bombs) == 1 && app.Game.Player.ActiveBombs == 1, fmt.Sprintf("bombs=%d", len(app.Game.Bombs)))
+	stickOK, stickDetail := validateStick(temp, landW, landH)
+	add("joystick-direction", stickOK, stickDetail)
 
 	app.PrepareVerificationData()
 	must(render4K(app, landW, landH, 3840, 2160, filepath.Join(out, "04-game-landscape-4k.png")))
@@ -266,6 +270,74 @@ func validateLayouts() bool {
 
 func overlaps(a, b bomber.Rect) bool {
 	return a.X < b.Right() && a.Right() > b.X && a.Y < b.Bottom() && a.Bottom() > b.Y
+}
+
+// Narysowane piksele musza miescic sie w polu deklarowanym przez metryke, inaczej napisy uciekaja z ramek.
+func validateFontMetrics() (bool, string) {
+	for _, text := range []string{"BOMBER RUSH", "NANOVO 2026", "GRAJ", "75.0 S | #1"} {
+		for _, h := range []int{14, 33, 96, 190} {
+			s := bomber.NewSurface(4000, 400)
+			const pen = 40
+			s.DrawText(pen, pen, h, text, bomber.RGB(255, 255, 255))
+			minX, minY, maxX, maxY := 1<<30, 1<<30, -1, -1
+			for y := 0; y < s.H; y++ {
+				for x := 0; x < s.W; x++ {
+					if s.Pix[y*s.W+x].A() == 0 {
+						continue
+					}
+					if x-pen < minX {
+						minX = x - pen
+					}
+					if y-pen < minY {
+						minY = y - pen
+					}
+					if x-pen > maxX {
+						maxX = x - pen
+					}
+					if y-pen > maxY {
+						maxY = y - pen
+					}
+				}
+			}
+			w := bomber.TextWidth(text, h)
+			boxH := 7 * max(1, h/7)
+			if maxX < 0 {
+				return false, fmt.Sprintf("%q h=%d: nic nie narysowano", text, h)
+			}
+			// Jeden piksel zapasu to obwodka antyaliasingu, nie rozjazd metryki.
+			if minX < -1 || maxX > w+1 || minY < -1 || maxY > boxH {
+				return false, fmt.Sprintf("%q h=%d: piksele %d..%d x %d..%d poza polem %dx%d", text, h, minX, maxX, minY, maxY, w, boxH)
+			}
+		}
+	}
+	return true, "narysowane piksele mieszcza sie w polu z TextWidth"
+}
+
+// Plywajacy drazek: lekki gest rusza postac, a zmiana kierunku dziala bez odrywania palca.
+func validateStick(root string, w, h int) (bool, string) {
+	app, err := bomber.NewApp(root, w, h)
+	if err != nil {
+		return false, err.Error()
+	}
+	app.Screen = bomber.ScreenPlay
+	app.StateAge = 1
+	app.PrepareVerificationData()
+	gs := bomber.NewGestures(app, w, h)
+	startX := app.Game.Player.X
+	gs.Down(1, w/2, h/2)
+	gs.Move(1, w/2+int(gs.DeadZone())+3, h/2)
+	if !app.Stick.Active || app.Stick.DirX != 1 {
+		return false, fmt.Sprintf("lekki gest nie ruszyl postaci: active=%v dir=%d", app.Stick.Active, app.Stick.DirX)
+	}
+	gs.Move(1, w/2+int(gs.DeadZone())+3, h/2+int(gs.DeadZone())*6)
+	if app.Stick.DirY != 1 || app.Stick.DirX != 0 {
+		return false, fmt.Sprintf("brak zmiany kierunku bez odrywania palca: %d,%d", app.Stick.DirX, app.Stick.DirY)
+	}
+	gs.Up(1, w/2, h/2)
+	if app.Stick.Active {
+		return false, "drazek zostal po oderwaniu palca"
+	}
+	return true, fmt.Sprintf("martwa strefa=%.0f px, start x=%d", gs.DeadZone(), startX)
 }
 
 func tapKey(app *bomber.App, layout bomber.Layout, value string) bool {

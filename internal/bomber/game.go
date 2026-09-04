@@ -236,14 +236,56 @@ func (g *Game) startMove(direction Point) bool {
 	return true
 }
 
+// Kanon miejsca podłożenia bomby: po przekroczeniu połowy kroku liczy się pole docelowe.
+func (g *Game) BombOrigin() (int, int) {
+	if g.Player.IsMoving() && g.Player.MoveT/g.Player.MoveDuration > .55 {
+		return g.Player.ToX, g.Player.ToY
+	}
+	return g.Player.X, g.Player.Y
+}
+
+// Wspólny przebieg promieni wybuchu; visit przerywa promień, gdy zwróci false.
+func (g *Game) walkBlast(x, y, radius int, visit func(cx, cy int) bool) {
+	visit(x, y)
+	for _, d := range []Point{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+		for step := 1; step <= radius; step++ {
+			cx, cy := x+d.X*step, y+d.Y*step
+			if cx < 0 || cy < 0 || cx >= GridW || cy >= GridH || g.Grid[cy][cx] == Wall {
+				break
+			}
+			if !visit(cx, cy) {
+				break
+			}
+		}
+	}
+}
+
+// Pola, które objąłby wybuch — ten sam przebieg co detonacja, bez skutków ubocznych.
+func (g *Game) BlastCells(x, y, radius int) []Point {
+	cells := make([]Point, 0, 4*radius+1)
+	g.walkBlast(x, y, radius, func(cx, cy int) bool {
+		cells = append(cells, Point{cx, cy})
+		return g.Grid[cy][cx] != Crate
+	})
+	return cells
+}
+
+// Pole, na które gracz właśnie celuje: docelowe przy ruchu, sąsiednie przy trzymanym kierunku.
+func (g *Game) TargetCell() Point {
+	if g.Player.IsMoving() {
+		return Point{g.Player.ToX, g.Player.ToY}
+	}
+	if g.hold != (Point{}) && g.passable(g.Player.X+g.hold.X, g.Player.Y+g.hold.Y, true) {
+		return Point{g.Player.X + g.hold.X, g.Player.Y + g.hold.Y}
+	}
+	return Point{g.Player.X, g.Player.Y}
+}
+
 func (g *Game) PlaceBomb() bool {
 	if g.Finished || g.Player.ActiveBombs >= g.Player.MaxBombs {
 		return false
 	}
-	x, y := g.Player.X, g.Player.Y
-	if g.Player.IsMoving() && g.Player.MoveT/g.Player.MoveDuration > .55 {
-		x, y = g.Player.ToX, g.Player.ToY
-	}
+	x, y := g.BombOrigin()
 	for _, b := range g.Bombs {
 		if !b.Exploded && b.X == x && b.Y == y {
 			return false
@@ -352,29 +394,22 @@ func (g *Game) detonate(b *Bomb) {
 	b.Exploded = true
 	g.Player.ActiveBombs = max(0, g.Player.ActiveBombs-1)
 	e := &Explosion{ID: g.next(), BombID: b.ID, TTL: .56, Duration: .56}
-	e.Cells = append(e.Cells, Point{b.X, b.Y})
-	dirs := []Point{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
-	for _, d := range dirs {
-		for step := 1; step <= b.Range; step++ {
-			x, y := b.X+d.X*step, b.Y+d.Y*step
-			if x < 0 || y < 0 || x >= GridW || y >= GridH || g.Grid[y][x] == Wall {
-				break
-			}
-			e.Cells = append(e.Cells, Point{x, y})
-			if g.Grid[y][x] == Crate {
-				g.Grid[y][x] = Floor
-				g.Score += 10
-				g.spawnCratePickup(x, y)
-				g.spawnBurst(float64(x)+.5, float64(y)+.5, RGB(255, 181, 71), 8)
-				break
-			}
-			for _, chained := range g.Bombs {
-				if !chained.Exploded && chained.X == x && chained.Y == y {
-					g.detonate(chained)
-				}
+	g.walkBlast(b.X, b.Y, b.Range, func(x, y int) bool {
+		e.Cells = append(e.Cells, Point{x, y})
+		if g.Grid[y][x] == Crate {
+			g.Grid[y][x] = Floor
+			g.Score += 10
+			g.spawnCratePickup(x, y)
+			g.spawnBurst(float64(x)+.5, float64(y)+.5, RGB(255, 181, 71), 8)
+			return false
+		}
+		for _, chained := range g.Bombs {
+			if !chained.Exploded && chained.X == x && chained.Y == y {
+				g.detonate(chained)
 			}
 		}
-	}
+		return true
+	})
 	g.Explosions = append(g.Explosions, e)
 	g.Shake = minFloat(1, g.Shake+.42)
 	g.Flash = minFloat(1, g.Flash+.28)

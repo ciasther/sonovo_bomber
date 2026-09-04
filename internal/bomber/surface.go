@@ -165,18 +165,29 @@ func (s *Surface) arcQuadrant(box Rect, ccx, ccy, rOuter, rInner float64, c Colo
 }
 
 func (s *Surface) FillRoundRect(r Rect, radius int, c Color) {
+	s.fillRoundRectRows(r, radius, func(int) Color { return c })
+}
+
+// Pionowy gradient w zaokrąglonym prostokącie; wspólny rdzeń z FillRoundRect.
+func (s *Surface) FillRoundRectGradient(r Rect, radius int, top, bottom Color) {
+	span := float64(max(1, r.H-1))
+	s.fillRoundRectRows(r, radius, func(yy int) Color { return Mix(top, bottom, float64(yy)/span) })
+}
+
+func (s *Surface) fillRoundRectRows(r Rect, radius int, colorAt func(yy int) Color) {
 	if r.W <= 0 || r.H <= 0 {
 		return
 	}
 	radius = min(radius, min(r.W, r.H)/2)
-	if radius <= 0 {
-		s.FillRect(r, c)
-		return
-	}
 	fr := float64(radius)
 	for yy := 0; yy < r.H; yy++ {
 		y := r.Y + yy
 		if y < 0 || y >= s.H {
+			continue
+		}
+		c := colorAt(yy)
+		if radius <= 0 {
+			s.FillRect(Rect{r.X, y, r.W, 1}, c)
 			continue
 		}
 		xL := -.5
@@ -335,6 +346,84 @@ func (s *Surface) GlowCircle(cx, cy, radius int, c Color) {
 		s.FillCircle(cx, cy, r, c.Alpha(a))
 	}
 	s.FillCircle(cx, cy, radius, c)
+}
+
+type Vec2 struct{ X, Y float64 }
+
+func distanceToSegment(px, py float64, a, b Vec2) float64 {
+	dx, dy := b.X-a.X, b.Y-a.Y
+	lenSq := dx*dx + dy*dy
+	t := 0.0
+	if lenSq > 0 {
+		t = ((px-a.X)*dx + (py-a.Y)*dy) / lenSq
+		if t < 0 {
+			t = 0
+		} else if t > 1 {
+			t = 1
+		}
+	}
+	return math.Hypot(px-(a.X+dx*t), py-(a.Y+dy*t))
+}
+
+// Łamana o zaokrąglonych końcach i złączach; pokrycie liczone z odległości do odcinków.
+func (s *Surface) StrokePath(pts []Vec2, width float64, c Color) {
+	if len(pts) == 0 || width <= 0 {
+		return
+	}
+	half := width / 2
+	minX, minY := pts[0].X, pts[0].Y
+	maxX, maxY := minX, minY
+	for _, p := range pts[1:] {
+		minX, maxX = math.Min(minX, p.X), math.Max(maxX, p.X)
+		minY, maxY = math.Min(minY, p.Y), math.Max(maxY, p.Y)
+	}
+	x0 := max(0, int(math.Floor(minX-half-1)))
+	y0 := max(0, int(math.Floor(minY-half-1)))
+	x1 := min(s.W-1, int(math.Ceil(maxX+half+1)))
+	y1 := min(s.H-1, int(math.Ceil(maxY+half+1)))
+	for y := y0; y <= y1; y++ {
+		fy := float64(y)
+		for x := x0; x <= x1; x++ {
+			fx := float64(x)
+			d := math.MaxFloat64
+			if len(pts) == 1 {
+				d = math.Hypot(fx-pts[0].X, fy-pts[0].Y)
+			}
+			for i := 0; i+1 < len(pts); i++ {
+				if v := distanceToSegment(fx, fy, pts[i], pts[i+1]); v < d {
+					d = v
+				}
+			}
+			s.blendCoverage(x, y, half+.5-d, c)
+		}
+	}
+}
+
+// Blit maski krycia w zadanym kolorze; maska trzyma pokrycie w kanale alfa.
+func (s *Surface) DrawMask(m *Surface, x, y int, c Color) {
+	if m == nil {
+		return
+	}
+	base := uint32(c.A())
+	for my := 0; my < m.H; my++ {
+		dy := y + my
+		if dy < 0 || dy >= s.H {
+			continue
+		}
+		row := m.Pix[my*m.W : (my+1)*m.W]
+		for mx, v := range row {
+			a := uint32(v.A())
+			if a == 0 {
+				continue
+			}
+			dx := x + mx
+			if dx < 0 || dx >= s.W {
+				continue
+			}
+			i := dy*s.W + dx
+			s.Pix[i] = blendOver(s.Pix[i], c.Alpha(uint8((a*base+127)/255)))
+		}
+	}
 }
 
 type Sprite struct {

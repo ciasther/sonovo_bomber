@@ -276,3 +276,83 @@ func TestSimulationTempoIsSlowerThanRoundClock(t *testing.T) {
 		t.Fatalf("lont nie zwolnil o GameSpeed: %v", g.Bombs[0].Fuse)
 	}
 }
+
+func TestBlastCellsMatchDetonationAndStopAtObstacles(t *testing.T) {
+	g := NewGame(75, 3)
+	openGrid(g)
+	g.Grid[1][4] = Crate
+	g.Grid[3][1] = Wall
+	g.Player.X, g.Player.Y = 1, 1
+	g.Player.Range = 4
+	cells := g.BlastCells(1, 1, g.Player.Range)
+	has := func(x, y int) bool {
+		for _, p := range cells {
+			if p.X == x && p.Y == y {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(1, 1) || !has(4, 1) {
+		t.Fatalf("podglad nie siega do skrzyni: %v", cells)
+	}
+	if has(5, 1) {
+		t.Fatal("podglad przeszedl przez skrzynie")
+	}
+	if has(1, 3) || has(1, 4) {
+		t.Fatalf("podglad przeszedl przez sciane: %v", cells)
+	}
+	if !g.PlaceBomb() {
+		t.Fatal("bomba nie zostala postawiona")
+	}
+	g.detonate(g.Bombs[0])
+	e := g.Explosions[len(g.Explosions)-1]
+	if len(e.Cells) != len(cells) {
+		t.Fatalf("podglad %d != detonacja %d", len(cells), len(e.Cells))
+	}
+	for i := range cells {
+		if cells[i] != e.Cells[i] {
+			t.Fatalf("pole %d: podglad %v != detonacja %v", i, cells[i], e.Cells[i])
+		}
+	}
+}
+
+func TestBombOriginFollowsPlayerPastHalfStep(t *testing.T) {
+	g := NewGame(75, 3)
+	openGrid(g)
+	g.Player.X, g.Player.Y = 1, 1
+	if x, y := g.BombOrigin(); x != 1 || y != 1 {
+		t.Fatalf("stojac: %d,%d", x, y)
+	}
+	g.Swipe(1, 0)
+	g.Update(.02)
+	if x, _ := g.BombOrigin(); x != 1 {
+		t.Fatalf("na poczatku kroku bomba powinna zostac pod graczem: %d", x)
+	}
+	for g.Player.IsMoving() && g.Player.MoveT/g.Player.MoveDuration <= .6 {
+		g.Update(.01)
+	}
+	if x, _ := g.BombOrigin(); x != 2 {
+		t.Fatalf("po polowie kroku bomba powinna isc na pole docelowe: %d", x)
+	}
+}
+
+func TestTargetCellShowsHeldDirection(t *testing.T) {
+	g := NewGame(75, 3)
+	openGrid(g)
+	g.Player.X, g.Player.Y = 1, 1
+	if g.TargetCell() != (Point{1, 1}) {
+		t.Fatalf("bez kierunku: %v", g.TargetCell())
+	}
+	g.Swipe(1, 0)
+	if g.TargetCell() != (Point{2, 1}) {
+		t.Fatalf("w ruchu: %v", g.TargetCell())
+	}
+	g.Release()
+	for g.Player.IsMoving() {
+		g.Update(.01)
+	}
+	if g.TargetCell() != (Point{2, 1}) {
+		t.Fatalf("po zatrzymaniu: %v", g.TargetCell())
+	}
+}

@@ -41,6 +41,15 @@ type TouchPulse struct {
 	Good bool
 }
 
+// Pływający drążek: kotwica idzie za palcem, kierunek liczy się z bieżącego wychylenia.
+type Stick struct {
+	Active           bool
+	AnchorX, AnchorY float64
+	X, Y             float64
+	Radius           float64
+	DirX, DirY       int
+}
+
 type SoundCue uint8
 
 const (
@@ -74,6 +83,9 @@ type App struct {
 	HistoryPage      int
 	Pulses           []TouchPulse
 	Sounds           []SoundCue
+	Stick            Stick
+	PressedKey       string
+	PressedKeyAge    float64
 	TutorialVisible  bool
 	tutorialShown    bool
 	timeWarningSent  bool
@@ -149,6 +161,12 @@ func (a *App) Update(dt float64) {
 		}
 	}
 	a.Pulses = pulses
+	if a.PressedKey != "" {
+		a.PressedKeyAge += dt
+		if a.PressedKeyAge > .16 {
+			a.PressedKey = ""
+		}
+	}
 
 	if a.TotalTime-a.lastBrandCheck >= 1.0 {
 		a.lastBrandCheck = a.TotalTime
@@ -282,16 +300,16 @@ func (a *App) Swipe(dx, dy int) {
 }
 
 func (a *App) Release() {
+	a.Stick = Stick{}
 	if a.Game != nil {
 		a.Game.Release()
 	}
 }
 
 func (a *App) handleNickTap(layout Layout, x, y int) {
-	for _, key := range layout.KeyboardKeys {
-		if !containsTouchKey(key.Rect, x, y) {
-			continue
-		}
+	key, ok := findTouchKey(layout.KeyboardKeys, x, y)
+	if ok {
+		a.PressedKey, a.PressedKeyAge = key.Value, 0
 		switch key.Value {
 		case "BACK":
 			if len(a.Nick) > 0 {
@@ -317,10 +335,9 @@ func (a *App) handleNickTap(layout Layout, x, y int) {
 }
 
 func (a *App) handleAdminPINTap(layout Layout, x, y int) {
-	for _, key := range layout.PinKeys {
-		if !containsTouchKey(key.Rect, x, y) {
-			continue
-		}
+	key, ok := findTouchKey(layout.PinKeys, x, y)
+	if ok {
+		a.PressedKey, a.PressedKeyAge = key.Value, 0
 		switch key.Value {
 		case "BACK":
 			if len(a.AdminPINInput) > 0 {
@@ -349,8 +366,26 @@ func (a *App) handleAdminPINTap(layout Layout, x, y int) {
 }
 
 func containsTouchKey(rect Rect, x, y int) bool {
-	padding := max(4, min(rect.W, rect.H)/14)
+	padding := max(6, min(rect.W, rect.H)/8)
 	return rect.Inset(-padding).Contains(x, y)
+}
+
+// Powiększone pola klawiszy zachodzą na siebie, więc z trafionych wygrywa ten o najbliższym środku.
+func findTouchKey(keys []KeyRegion, x, y int) (KeyRegion, bool) {
+	best, found := KeyRegion{}, false
+	bestDist := 0
+	for _, key := range keys {
+		if !containsTouchKey(key.Rect, x, y) {
+			continue
+		}
+		dx := x - (key.Rect.X + key.Rect.W/2)
+		dy := y - (key.Rect.Y + key.Rect.H/2)
+		d := dx*dx + dy*dy
+		if !found || d < bestDist {
+			best, bestDist, found = key, d, true
+		}
+	}
+	return best, found
 }
 
 func (a *App) startRun() {
@@ -411,6 +446,8 @@ func normalizeNick(nick string) string {
 func (a *App) changeScreen(screen Screen) {
 	a.Screen = screen
 	a.StateAge = 0
+	a.Stick = Stick{}
+	a.PressedKey = ""
 }
 
 func (a *App) resetToAttract() {

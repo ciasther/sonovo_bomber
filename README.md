@@ -2,8 +2,9 @@
 
 Gotowa gra kioskowa dla Windows x86-64. Domyślnie uruchamia się bez ramek, na pełnym ekranie i ponad innymi oknami. Cała obsługa odbywa się dotykiem:
 
-- przesunięcie palcem w czterech kierunkach - ruch; wystarczy krótki gest, ruch rusza już w jego trakcie, a przytrzymany palec prowadzi postać dalej,
-- zmiana kierunku - przeciągnięcie palca w nową stronę bez odrywania,
+- pływający drążek - palec przyłożony w dowolnym miejscu planszy staje się środkiem drążka; lekkie wychylenie prowadzi postać i trzyma ją w ruchu,
+- zmiana kierunku - przesunięcie palca w nową stronę bez odrywania; powrót do środka zatrzymuje postać,
+- podpowiedź celowania - podświetlone pole docelowe i zasięg bomby, którą postawisz w tej chwili,
 - dotknięcie planszy albo drugi palec podczas marszu - ustawienie bomby (na start dwie bomby naraz),
 - pierwsza runda - krótka podpowiedź gestów,
 - wynik rundy pozostaje na ekranie do wybrania rankingu albo ponownej gry,

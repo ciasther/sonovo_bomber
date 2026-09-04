@@ -97,3 +97,91 @@ func TestCachedRenderMatchesFreshRender(t *testing.T) {
 		}
 	}
 }
+
+func TestLogoCardsFitInsideHeader(t *testing.T) {
+	sizes := [][2]int{{1440, 810}, {810, 1440}, {1920, 1080}, {1080, 1920}, {1280, 800}, {800, 1280}}
+	screens := []Screen{ScreenAttract, ScreenNick, ScreenRanking, ScreenSummary, ScreenAdminPIN, ScreenHistory}
+	logos := []*Sprite{nil, {W: 1200, H: 300}, {W: 400, H: 400}, {W: 300, H: 1200}}
+	for _, sz := range sizes {
+		for _, sc := range screens {
+			l := ComputeLayout(sz[0], sz[1], sc)
+			for _, sp := range logos {
+				for _, card := range []Rect{logoCard(l.NanoLogo, sp, false), logoCard(l.PartnerLogo, sp, true)} {
+					if card.W < 1 || card.H < 1 {
+						t.Fatalf("%v %d: pusta karta %+v", sz, sc, card)
+					}
+					if card.X < 0 || card.Y < 0 || card.Right() > sz[0] || card.Bottom() > l.Header.Bottom() {
+						t.Fatalf("%v %d: karta %+v poza naglowkiem %+v", sz, sc, card, l.Header)
+					}
+				}
+			}
+			if l.NanoLogo.Right() >= l.PartnerLogo.X {
+				t.Fatalf("%v %d: logo nachodza na siebie", sz, sc)
+			}
+		}
+	}
+}
+
+func TestKeyboardKeysStayInsideAreaAndAreTouchSized(t *testing.T) {
+	for _, sz := range [][2]int{{1440, 810}, {810, 1440}, {1920, 1080}} {
+		l := ComputeLayout(sz[0], sz[1], ScreenNick)
+		if len(l.KeyboardKeys) == 0 {
+			t.Fatalf("%v: brak klawiszy", sz)
+		}
+		for _, k := range l.KeyboardKeys {
+			if k.Rect.W < 24 || k.Rect.H < 24 {
+				t.Fatalf("%v: klawisz za maly: %+v", sz, k.Rect)
+			}
+			if k.Rect.X < l.Keyboard.X || k.Rect.Right() > l.Keyboard.Right() || k.Rect.Y < l.Keyboard.Y || k.Rect.Bottom() > l.Keyboard.Bottom() {
+				t.Fatalf("%v: klawisz %q poza obszarem: %+v w %+v", sz, k.Value, k.Rect, l.Keyboard)
+			}
+		}
+	}
+}
+
+func TestPressedKeyIsClearedAfterShortTime(t *testing.T) {
+	a := &App{Screen: ScreenNick, ViewW: 1440, ViewH: 810, Brand: &Branding{}, PressedKey: "A"}
+	a.Update(.05)
+	if a.PressedKey != "A" {
+		t.Fatal("podswietlenie znika za szybko")
+	}
+	a.Update(.1)
+	a.Update(.1)
+	if a.PressedKey != "" {
+		t.Fatal("podswietlenie nie znika")
+	}
+}
+
+func TestTouchInKeyGapPicksNearestKey(t *testing.T) {
+	l := ComputeLayout(1440, 810, ScreenNick)
+	var q, w KeyRegion
+	for _, k := range l.KeyboardKeys {
+		if k.Value == "Q" {
+			q = k
+		}
+		if k.Value == "W" {
+			w = k
+		}
+	}
+	if q.Value == "" || w.Value == "" {
+		t.Fatal("brak klawiszy Q i W")
+	}
+	y := q.Rect.Y + q.Rect.H/2
+	for _, tc := range []struct {
+		x    int
+		want string
+	}{
+		{q.Rect.Right() + 1, "Q"},
+		{w.Rect.X - 1, "W"},
+		{q.Rect.X + q.Rect.W/2, "Q"},
+		{w.Rect.X + w.Rect.W/2, "W"},
+	} {
+		got, ok := findTouchKey(l.KeyboardKeys, tc.x, y)
+		if !ok || got.Value != tc.want {
+			t.Fatalf("x=%d: %q (ok=%v), oczekiwano %q", tc.x, got.Value, ok, tc.want)
+		}
+	}
+	if _, ok := findTouchKey(l.KeyboardKeys, 5, 5); ok {
+		t.Fatal("dotyk daleko od klawiatury trafil w klawisz")
+	}
+}

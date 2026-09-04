@@ -63,15 +63,17 @@ func ComputeLayout(w, h int, screen Screen) Layout {
 		headerH = 0
 	}
 	land := float64(w)/float64(h) >= 1.15
-	logoH := max(62, headerH-m/2)
-	logoW := int(float64(logoH) * 3.5)
-	logoW = min(logoW, int(float64(w)*.25))
+	// Karty logo są maksymalnym polem: mieszczą się w nagłówku z marginesem, a rysowanie dopasowuje je do proporcji grafiki.
+	logoPad := max(6, headerH/9)
+	logoH := max(1, headerH-2*logoPad)
+	logoW := min(int(float64(logoH)*3.4), int(float64(w)*.26))
+	partnerW := min(int(float64(logoH)*3.4), int(float64(w)*.24))
 	l := Layout{
 		Landscape:   land,
 		Margin:      m,
 		Header:      Rect{0, 0, w, headerH},
-		NanoLogo:    Rect{m, m / 2, logoW, logoH},
-		PartnerLogo: Rect{w - m - min(int(float64(w)*.22), logoW), m / 2, min(int(float64(w)*.22), logoW), logoH},
+		NanoLogo:    Rect{m, logoPad, logoW, logoH},
+		PartnerLogo: Rect{w - m - partnerW, logoPad, partnerW, logoH},
 		Content:     Rect{m, headerH + m/2, w - 2*m, h - headerH - 3*m/2},
 	}
 	if headerH == 0 {
@@ -188,7 +190,7 @@ func compactKeyboardArea(area Rect, landscape bool) Rect {
 
 func keyboardRegions(area Rect, margin int) []KeyRegion {
 	rows := []string{"QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"}
-	gap := max(8, margin/3)
+	gap := max(6, margin/5)
 	rowH := (area.H - gap*4) / 4
 	var out []KeyRegion
 	for ri, row := range rows {
@@ -213,7 +215,7 @@ func keyboardRegions(area Rect, margin int) []KeyRegion {
 }
 
 func pinRegions(area Rect, margin int) []KeyRegion {
-	gap := max(10, margin/3)
+	gap := max(8, margin/5)
 	top := area.Y + int(float64(area.H)*.24)
 	gridH := area.Bottom() - top
 	rowH := (gridH - gap*3) / 4
@@ -350,26 +352,41 @@ func (r *Renderer) drawTopBar(a *App, l Layout) {
 	s := r.Surface
 	s.FillRect(l.Header, RGB(3, 7, 22).Alpha(238))
 	s.FillRect(Rect{0, l.Header.Bottom() - 2, s.W, 2}, a.Brand.Primary.Alpha(150))
-	card := l.NanoLogo.Inset(-8)
-	s.FillRoundRect(card, max(14, card.H/7), RGB(250, 252, 255))
-	s.OutlineRoundRect(card, max(14, card.H/7), 2, a.Brand.Primary.Alpha(180))
+	card := logoCard(l.NanoLogo, a.Logo, false)
+	pad := max(3, card.H/12)
+	s.FillRoundRectGradient(card, max(10, card.H/6), RGB(255, 255, 255), RGB(232, 240, 250))
+	s.OutlineRoundRect(card, max(10, card.H/6), 2, a.Brand.Primary.Alpha(180))
 	if a.Logo != nil {
-		s.DrawSprite(a.Logo, l.NanoLogo.Inset(7), 255, true)
+		s.DrawSprite(a.Logo, card.Inset(pad), 255, true)
 	} else {
-		s.DrawTextCentered(l.NanoLogo, 28, "LOGO BRAK", RGB(12, 18, 35))
+		s.DrawTextCentered(card.Inset(pad), card.H/2, "LOGO BRAK", RGB(12, 18, 35))
 	}
-	partnerCard := l.PartnerLogo.Inset(-7)
-	s.FillRoundRect(partnerCard, max(14, partnerCard.H/7), RGB(9, 17, 41).Alpha(245))
-	s.OutlineRoundRect(partnerCard, max(14, partnerCard.H/7), 2, a.Brand.Secondary.Alpha(180))
+	partnerCard := logoCard(l.PartnerLogo, a.Brand.PartnerLogo, true)
+	s.FillRoundRectGradient(partnerCard, max(10, partnerCard.H/6), RGB(15, 26, 58).Alpha(245), RGB(7, 13, 34).Alpha(245))
+	s.OutlineRoundRect(partnerCard, max(10, partnerCard.H/6), 2, a.Brand.Secondary.Alpha(180))
 	if a.Brand.PartnerLogo != nil {
-		s.DrawSprite(a.Brand.PartnerLogo, l.PartnerLogo.Inset(5), 255, true)
+		s.DrawSprite(a.Brand.PartnerLogo, partnerCard.Inset(max(3, partnerCard.H/12)), 255, true)
 	} else {
-		s.DrawTextCentered(l.PartnerLogo, 25, a.Brand.Config.Partner.Name, RGB(240, 248, 255))
+		s.DrawTextCentered(partnerCard.Inset(max(3, partnerCard.H/12)), partnerCard.H/2, a.Brand.Config.Partner.Name, RGB(240, 248, 255))
 	}
-	center := Rect{l.NanoLogo.Right() + l.Margin, l.Header.Y, l.PartnerLogo.X - l.Margin - l.NanoLogo.Right() - l.Margin, l.Header.H}
+	center := Rect{card.Right() + l.Margin, l.Header.Y, partnerCard.X - l.Margin - card.Right() - l.Margin, l.Header.H}
 	if center.W > 40 {
 		s.DrawTextCentered(center.Inset(8), clamp(l.Header.H/5, 14, 25), a.Brand.Config.EventName, RGB(154, 178, 207))
 	}
+}
+
+// Karta logo dostaje proporcje grafiki, więc nie zostaje pusty pas obok obrazka.
+func logoCard(box Rect, sp *Sprite, alignRight bool) Rect {
+	aspect := 3.4
+	if sp != nil && sp.H > 0 {
+		aspect = float64(sp.W) / float64(sp.H)
+	}
+	w := clamp(int(float64(box.H)*aspect), 1, box.W)
+	x := box.X
+	if alignRight {
+		x = box.Right() - w
+	}
+	return Rect{x, box.Y, w, box.H}
 }
 
 func (r *Renderer) drawAttract(a *App, l Layout) {
@@ -388,7 +405,7 @@ func (r *Renderer) drawAttract(a *App, l Layout) {
 	chipW := min(520, (l.Subtitle.W-gap)/2)
 	left := Rect{l.Subtitle.X + (l.Subtitle.W-(chipW*2+gap))/2, chipY, chipW, chipH}
 	right := Rect{left.Right() + gap, chipY, chipW, chipH}
-	r.drawInfoChip(left, "PRZESUN PALCEM", "RUCH O JEDNO POLE", a.Brand.Primary)
+	r.drawInfoChip(left, "PRZESUN I TRZYMAJ", "POSTAC IDZIE BEZ PRZERWY", a.Brand.Primary)
 	r.drawInfoChip(right, "DOTKNIJ EKRANU", "USTAW BOMBE", a.Brand.Secondary)
 	r.drawButton(l.PrimaryButton, "DOTKNIJ, ABY ZAGRAC", a.Brand.Primary, true, pulse)
 	headline := a.Brand.Config.Partner.Headline
@@ -422,7 +439,7 @@ func (r *Renderer) drawNick(a *App, l Layout) {
 		} else if key.Value == "BACK" {
 			accent = a.Brand.Secondary
 		}
-		r.drawKey(key.Rect, key.Label, accent, key.Value == "PLAY")
+		r.drawKey(key.Rect, key.Label, accent, key.Value == "PLAY", a.PressedKey == key.Value)
 	}
 	r.drawSmallButton(l.BackButton, "WROC", RGB(116, 137, 165))
 }
@@ -432,6 +449,7 @@ func (r *Renderer) drawPlay(a *App, l Layout, countdown bool) {
 		return
 	}
 	r.drawBoard(a, l.Board)
+	r.drawStick(a)
 	r.drawHUD(a, l.HUD)
 	if a.TutorialVisible && a.StateAge < 6 {
 		r.drawPlayHint(a, l.Hint)
@@ -453,6 +471,26 @@ func (r *Renderer) drawPlay(a *App, l Layout, countdown bool) {
 		s.GlowCircle(l.Board.X+l.Board.W/2, l.Board.Y+l.Board.H/2, min(l.Board.W, l.Board.H)/7, Mix(a.Brand.Primary, a.Brand.Secondary, pulse).Alpha(80))
 		s.DrawTextCentered(l.Board.Inset(l.Board.W/7), min(l.Board.W, l.Board.H)/5, value, RGB(255, 255, 255))
 	}
+}
+
+func (r *Renderer) drawStick(a *App) {
+	st := a.Stick
+	if !st.Active || st.Radius <= 0 {
+		return
+	}
+	s := r.Surface
+	cx, cy := int(st.AnchorX), int(st.AnchorY)
+	rad := int(st.Radius)
+	s.FillCircle(cx, cy, rad, RGB(6, 14, 34).Alpha(96))
+	s.Ring(cx, cy, rad, max(2, rad/16), a.Brand.Primary.Alpha(140))
+	if st.DirX != 0 || st.DirY != 0 {
+		s.FillCircle(cx+st.DirX*rad*3/4, cy+st.DirY*rad*3/4, max(3, rad/9), a.Brand.Accent.Alpha(205))
+	}
+	knob := max(6, rad/3)
+	kx, ky := int(st.X), int(st.Y)
+	s.GlowCircle(kx, ky, knob, a.Brand.Primary.Alpha(90))
+	s.FillCircle(kx, ky, knob, a.Brand.Primary.Alpha(225))
+	s.Ring(kx, ky, knob, max(2, knob/5), RGB(255, 255, 255).Alpha(190))
 }
 
 func (r *Renderer) drawBoard(a *App, rect Rect) {
@@ -490,6 +528,22 @@ func (r *Renderer) drawBoard(a *App, rect Rect) {
 		r.renderGrid(r.grid, a, cell)
 	}
 	r.blit(r.grid, ox, oy)
+	// Podpowiedź celowania: pole, na które gracz idzie, i zasięg bomby, którą postawi teraz.
+	if !g.Finished {
+		aim := .5 + .5*math.Sin(a.TotalTime*3.4)
+		bx, by := g.BombOrigin()
+		cells := []Point(nil)
+		if g.Player.ActiveBombs < g.Player.MaxBombs {
+			cells = g.BlastCells(bx, by, g.Player.Range)
+		}
+		for _, p := range cells {
+			br := cellRect(p.X, p.Y).Inset(max(2, int(cell*.17)))
+			s.FillRoundRect(br, max(3, br.W/3), a.Brand.Accent.Alpha(uint8(22+18*aim)))
+		}
+		t := g.TargetCell()
+		tr := cellRect(t.X, t.Y).Inset(max(1, int(cell*.07)))
+		s.OutlineRoundRect(tr, max(4, tr.W/5), max(2, tr.W/22), a.Brand.Primary.Alpha(uint8(80+70*aim)))
+	}
 	// pickups
 	for _, p := range g.Pickups {
 		cr := cellRect(p.X, p.Y)
@@ -748,7 +802,7 @@ func (r *Renderer) drawPlayHint(a *App, rect Rect) {
 	s := r.Surface
 	s.FillRoundRect(rect, max(14, rect.H/5), RGB(8, 16, 38).Alpha(225))
 	s.OutlineRoundRect(rect, max(14, rect.H/5), 2, a.Brand.Primary.Alpha(150))
-	s.DrawTextCentered(rect.Inset(10), clamp(rect.H/4, 16, 28), "PRZESUN I TRZYMAJ: RUCH   |   DOTKNIJ: BOMBA", RGB(226, 241, 255))
+	s.DrawTextCentered(rect.Inset(10), clamp(rect.H/4, 16, 28), "PRZESUN PALCEM: RUCH   |   DOTKNIJ: BOMBA", RGB(226, 241, 255))
 }
 
 func (r *Renderer) drawStatCard(rect Rect, label, value string, c Color) {
@@ -927,7 +981,7 @@ func (r *Renderer) drawAdminPIN(a *App, l Layout) {
 		} else if key.Value == "BACK" {
 			accent = a.Brand.Secondary
 		}
-		r.drawKey(key.Rect, key.Label, accent, key.Value == "OK")
+		r.drawKey(key.Rect, key.Label, accent, key.Value == "OK", a.PressedKey == key.Value)
 	}
 	r.drawSmallButton(l.BackButton, "WROC", RGB(116, 137, 165))
 }
@@ -976,7 +1030,7 @@ func (r *Renderer) drawButton(rect Rect, label string, c Color, pulse bool, p fl
 	}
 	s.FillRoundRect(rect.Inset(-max(5, rect.H/14)), max(18, rect.H/3), c.Alpha(glow))
 	bg := Mix(RGB(13, 29, 57), c, .28)
-	s.FillRoundRect(rect, max(18, rect.H/3), bg)
+	s.FillRoundRectGradient(rect, max(18, rect.H/3), Mix(bg, RGB(255, 255, 255), .16), Mix(bg, RGB(0, 0, 0), .22))
 	s.OutlineRoundRect(rect, max(18, rect.H/3), max(2, rect.H/35), c)
 	s.DrawTextCentered(rect.Inset(rect.H/5), clamp(rect.H/3, 26, 56), label, RGB(251, 254, 255))
 }
@@ -988,7 +1042,7 @@ func (r *Renderer) drawSmallButton(rect Rect, label string, c Color) {
 	s.DrawTextCentered(rect.Inset(8), clamp(rect.H/3, 17, 30), label, RGB(231, 241, 252))
 }
 
-func (r *Renderer) drawKey(rect Rect, label string, c Color, active bool) {
+func (r *Renderer) drawKey(rect Rect, label string, c Color, active, pressed bool) {
 	s := r.Surface
 	bg := RGB(17, 29, 55)
 	outline := c.Alpha(130)
@@ -996,13 +1050,21 @@ func (r *Renderer) drawKey(rect Rect, label string, c Color, active bool) {
 		bg = Mix(bg, c, .28)
 		outline = c
 	}
-	s.FillRoundRect(rect, max(10, rect.H/5), bg)
-	s.OutlineRoundRect(rect, max(10, rect.H/5), max(1, rect.H/40), outline)
+	radius := max(10, rect.H/5)
+	if pressed {
+		// Wciśnięty klawisz świeci i wchodzi w głąb, więc dotyk widać od razu.
+		s.FillRoundRect(rect.Inset(-max(3, rect.H/12)), radius, c.Alpha(90))
+		bg = Mix(bg, c, .55)
+		outline = RGB(255, 255, 255)
+		rect = rect.Inset(max(1, rect.H/22))
+	}
+	s.FillRoundRectGradient(rect, radius, Mix(bg, RGB(255, 255, 255), .14), Mix(bg, RGB(0, 0, 0), .18))
+	s.OutlineRoundRect(rect, radius, max(1, rect.H/40), outline)
 	fg := RGB(235, 244, 253)
-	if active {
+	if active || pressed {
 		fg = RGB(255, 255, 255)
 	}
-	s.DrawTextCentered(rect.Inset(max(5, rect.H/8)), clamp(rect.H/3, 20, 42), label, fg)
+	s.DrawTextCentered(rect.Inset(max(4, rect.H/10)), clamp(rect.H*2/5, 20, 46), label, fg)
 }
 
 func (r *Renderer) drawTab(rect Rect, label string, active bool, c Color) {
